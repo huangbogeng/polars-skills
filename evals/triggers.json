@@ -1,0 +1,91 @@
+{
+  "skill": "polars",
+  "should_fire": [
+    {
+      "id": "explicit-polars",
+      "prompt": "Use Polars to read sales.csv and return monthly revenue growth."
+    },
+    {
+      "id": "implicit-default",
+      "prompt": "orders.csv is in the working directory. Which region had the highest revenue? Write the Python analysis."
+    },
+    {
+      "id": "pandas-migration",
+      "prompt": "This pandas pipeline groups orders.csv by region and sums revenue. Convert it to Polars without changing the results."
+    },
+    {
+      "id": "debug-existing-polars",
+      "prompt": "My Polars code raises ColumnNotFoundError and I can't see why. Here it is:\n\n```python\nimport polars as pl\ndf = pl.read_csv(\"orders.csv\")\nout = df.group_by(\"order_date\").agg(pl.col(\"region\").first()).sort(\"revenue\")\nprint(out)\n```\n\nI want, per order_date, the region with the highest revenue. Find and fix the bug."
+    },
+    {
+      "id": "optimize-polars-pipeline",
+      "prompt": "My Polars script reads sales.csv and orders.csv with pl.read_csv, then joins and aggregates them. It takes two minutes on a 5 GB file. Rewrite it as a lazy pipeline that runs faster on one machine."
+    },
+    {
+      "id": "parquet-partitioned-scan",
+      "prompt": "In Python, analyze the parquet files under data/sales/ (one per month). Keep only rows where revenue > 100 and return totals per month. Use predicate and projection pushdown so unused columns are never decoded."
+    },
+    {
+      "id": "timeseries-rolling",
+      "prompt": "sales.csv has date (month-end, 2024-01-31 onward) and revenue. Compute a 3-month rolling average of revenue in Python, keeping the warm-up months as null instead of dropping them."
+    },
+    {
+      "id": "join-cardinality-check",
+      "prompt": "Joining orders.csv to a customer dimension table keeps duplicating rows. Show me how to assert the join cardinality in Python so a fan-out fails loudly instead of silently inflating revenue."
+    },
+    {
+      "id": "dataframe-no-library",
+      "prompt": "I have a Python script that builds a dataframe from this dict and groups it by region summing revenue:\n\n```python\nrows = [{\"region\": \"East\", \"revenue\": 100}, {\"region\": \"West\", \"revenue\": 250}]\n```\n\nIt feels handwritten and fragile. What library and idiom should I use in the data layer?"
+    },
+    {
+      "id": "ndjson-timeseries-gap",
+      "prompt": "events.ndjson in the working directory has one JSON object per line with event_time and value. Compute a per-minute average in Python and mark minutes with no events as missing rather than interpolated."
+    }
+  ],
+  "should_not_fire": [
+    {
+      "id": "explicit-pandas",
+      "prompt": "Use pandas to group this dataframe by region and sum revenue."
+    },
+    {
+      "id": "explicit-sql",
+      "prompt": "Write a SQL query that joins orders to customers and sums revenue."
+    },
+    {
+      "id": "explicit-duckdb",
+      "prompt": "In our Python app, use duckdb to read sales.csv directly and return total revenue per month."
+    },
+    {
+      "id": "explicit-pyspark",
+      "prompt": "Write a PySpark job that reads orders.csv and aggregates revenue by region for a cluster run."
+    },
+    {
+      "id": "concept-no-code",
+      "prompt": "Without writing any code: what is the difference between a columnar and a row-oriented storage layout, in two sentences?"
+    },
+    {
+      "id": "unrelated",
+      "prompt": "Explain how Rust's borrow checker prevents use-after-free errors."
+    },
+    {
+      "id": "web-frontend",
+      "prompt": "This React component re-renders on every keystroke in the search box. It renders rows from props and does no data fetching or computation itself. Show the fixed component with a memoized table."
+    },
+    {
+      "id": "polars-cloud-excluded",
+      "prompt": "We run Polars on a Polars Cloud cluster and want to distribute a group_by over many nodes. How do I scale this workload across the cluster?"
+    },
+    {
+      "id": "polars-gpu-excluded",
+      "prompt": "I want to run my Polars dataframe aggregation on GPUs with cudf-polars. Explain how to set up GPU execution for this Polars workload."
+    },
+    {
+      "id": "pandas-stays-pandas",
+      "prompt": "This pandas code is slow:\n\n```python\nimport pandas as pd\ndf = pd.read_csv(\"orders.csv\")\nprint(df.groupby(\"region\")[\"revenue\"].sum().sort_values(ascending=False))\n```\n\nRewrite it with pandas idioms and a faster pandas code path, staying on pandas."
+    },
+    {
+      "id": "unrelated-data-format",
+      "prompt": "Write a Python script that parses sales.csv and uploads every row to our Postgres table with psycopg2 in batches."
+    }
+  ]
+}

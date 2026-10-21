@@ -1,0 +1,33 @@
+name: Validate skill
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install skills-ref==0.1.1
+      - run: agentskills validate polars
+
+  examples:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        polars: ['1.44.2', '2.0.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m pip install "polars==${{ matrix.polars }}"
+      - run: python -W error::DeprecationWarning -m unittest discover -s tests -v

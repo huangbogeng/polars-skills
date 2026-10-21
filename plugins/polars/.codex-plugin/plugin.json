@@ -1,0 +1,32 @@
+{
+  "name": "polars",
+  "version": "0.4.0",
+  "description": "Write, debug, and optimize lazy Polars queries in Python, analyze data, and migrate pandas pipelines while preserving calculation semantics.",
+  "author": {
+    "name": "Polars"
+  },
+  "homepage": "https://pola.rs",
+  "repository": "https://github.com/polars-inc/skills",
+  "license": "MIT",
+  "keywords": [
+    "polars",
+    "dataframes",
+    "lazyframe",
+    "data-processing",
+    "data-analysis",
+    "python"
+  ],
+  "skills": "./skills",
+  "interface": {
+    "displayName": "Polars",
+    "shortDescription": "Idiomatic lazy Polars in Python",
+    "longDescription": "Write, debug, and optimize lazy Polars queries, analyze tabular data, and migrate pandas pipelines while preserving calculation semantics. Includes live API lookup and a deterministic evaluation harness.",
+    "developerName": "Polars",
+    "category": "Development",
+    "defaultPrompt": [
+      "Analyze this dataset with idiomatic lazy Polars.",
+      "Convert this pandas pipeline to Polars without changing results.",
+      "Debug why my Polars query returns the wrong rows."
+    ]
+  }
+}
