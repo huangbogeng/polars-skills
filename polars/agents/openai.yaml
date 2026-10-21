@@ -1,0 +1,7 @@
+interface:
+  display_name: "Polars"
+  short_description: "Write, debug, and optimize Polars in Python"
+  default_prompt: "Analyze this dataset with idiomatic lazy Polars."
+
+policy:
+  allow_implicit_invocation: true

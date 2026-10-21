@@ -56,7 +56,9 @@ lf.with_columns(
 )
 ```
 
-One context, one expression per distinct operation. When the operation is
+Group independent expressions in one context. A new alias is not visible to
+sibling expressions in the same call; chain contexts for dependencies.
+Polars can combine independent calls during optimization. When the operation is
 the same for every column, expand instead of generating one expression per
 column:
 
@@ -94,8 +96,10 @@ a comparison against null is null; add `| pl.col("v").is_null()` to keep them.
 ## group_by() + agg()
 
 One output row per unique group; output columns are the grouping keys plus
-the aggregations. `maintain_order=True` keeps first-seen group order (costs
-some parallelism).
+the aggregations. Group order is not guaranteed; `maintain_order=True`
+keeps first-seen group order (costs some parallelism). This matters more on
+Polars 2.0, where lazy collection defaults to the streaming engine. Sort the
+result when the consumer expects an order.
 
 ```python
 lf.group_by("region", "channel").agg(
@@ -118,14 +122,21 @@ lf.group_by(
 Aggregation building blocks:
 
 ```python
-pl.col("v").sum() / .mean() / .median() / .std() / .min() / .max()
+pl.col("v").sum()
+pl.col("v").mean()
+pl.col("v").median()
+pl.col("v").std()
+pl.col("v").min()
+pl.col("v").max()
+
 pl.col("v").quantile(0.95)          # e.g. 0.95 = 95th percentile
 pl.len()                            # rows in group, nulls included
 pl.col("v").count()                 # non-null values
 pl.col("v").null_count()            # null values in group
 pl.col("v").n_unique()              # distinct values in group
-pl.col("v").first() / .last()       # order = current row order within group
-pl.col("v").implode()           # collect group values into a list
+pl.col("v").first()                 # order = current row order within group
+pl.col("v").last()
+pl.col("v").implode()               # collect group values into a list
 ```
 
 Conditional aggregation, the workhorse for breakdown questions —
@@ -237,13 +248,26 @@ result = (
 )
 ```
 
-Anti-patterns:
+### Preserve operation order
+
+Filtering before an aggregation or window is correct only when those rows
+should be excluded from its input. Here `total` includes all source rows:
 
 ```python
-# filtering after expensive work
-lf.group_by("id").agg(...).filter(pl.col("year") == 2024)   # avoid
-lf.filter(pl.col("year") == 2024).group_by("id").agg(...)   # prefer
+(
+    lf.with_columns(pl.col("v").sum().alias("total"))
+    .filter(pl.col("v") > 1)
+    .collect()
+)
+```
 
+For `v = [1, 2, 3]`, the remaining rows both have `total = 6`. Moving the
+filter before `with_columns()` changes it to 5. Likewise, filtering the
+right input of a left join is not equivalent to filtering its output.
+
+Use expansion when the same operation applies to multiple columns:
+
+```python
 # loop of contexts
 for c in cols: lf = lf.with_columns(pl.col(c) * 2)     # avoid
 lf.with_columns(pl.col(cols) * 2)                      # prefer, replaces cols

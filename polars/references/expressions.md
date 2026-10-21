@@ -12,16 +12,21 @@ casting; `when / then / otherwise`.
 
 ## Finding & verifying expressions in the API reference
 
-The snippets below are a fast path. For any method you are not certain about
-— or a namespace not covered here — **fetch the live docs rather than
-guessing**; the API changed at 1.0.
+Examples target Polars 1.44.2 and 2.0.0. Verify uncertain methods against
+the project's installed version using `help()`, `inspect.signature()`, or
+matching-version official documentation.
 
-**Prefer `polars-mcp`** when it is installed in the project environment
-(`polars_search_api("keyword")` / `polars_get_docstring("Expr.str.contains")`).
-**Fall back to `WebFetch`** when it isn't: fetch
+**Prefer the bundled lookup** for the installed version, with no MCP or
+network: `python scripts/polars_api.py doc Expr.str.contains` (also
+`search <term>` and `browse Expr.str`). It introspects the interpreter that
+runs it, so use the project's environment. If `polars-mcp` is installed,
+`polars_search_api("keyword")` / `polars_get_docstring(...)` expose the same
+information. Otherwise use local introspection or a browser/fetch tool. For
+the latest release, the expression reference is
 `https://docs.pola.rs/api/python/stable/reference/expressions/<slug>.html`
-(use `stable`, it covers all of Polars 1.x) and ask for every method in the
-namespace with its current signature and a one-line description.
+(`stable` follows the latest release, not all 1.x versions). Select a version
+matching the project and retrieve the relevant method rather than an entire
+namespace. The category map below routes to the appropriate section.
 
 ### Category → URL map
 
@@ -64,8 +69,8 @@ pl.col("text").str.strip_chars()                # whitespace, both sides
 pl.col("text").str.strip_chars_start()          # also: strip_chars_end()
 pl.col("text").str.strip_chars(" ,-")           # strip specific characters
 
-pl.col("text").str.replace("old", "new")        # first match, literal
-pl.col("text").str.replace("pat", "new", n=1)   # n-th match
+pl.col("text").str.replace("old", "new", literal=True)  # first literal match
+pl.col("text").str.replace("pat", "new", n=2)   # first TWO regex matches
 pl.col("text").str.replace_all("old", "new")    # all matches
 pl.col("text").str.replace_all(r"\s+", " ")     # regex
 
@@ -84,6 +89,19 @@ pl.col("text").str.pad_start(8, "0")            # left-pad (also: pad_end)
 
 pl.col("text").str.to_integer(base=10, strict=False)  # parse to Int64
 pl.col("text").str.to_decimal(scale=2)                # parse to Decimal (scale = decimal places)
+```
+
+### Replace substrings
+
+Patterns are regexes by default. `n` limits the number of replacements; it
+does not select the nth match. Use `literal=True` for literal punctuation:
+
+```python
+lf.select(
+    pl.col("text").str.replace(".", "X").alias("regex"),
+    pl.col("text").str.replace(".", "X", literal=True).alias("literal"),
+    pl.col("text").str.replace("a", "X", n=2).alias("first_two"),
+).collect()
 ```
 
 ### Parse strings to dates and datetimes
@@ -219,8 +237,16 @@ pl.col("address").struct.with_fields(
     pl.field("city").str.to_uppercase()
 )
 
-# Parse JSON-embedded columns
-pl.col("payload").str.json_decode()    # String -> Struct or List
+```
+
+### Decode JSON with an explicit dtype
+
+The output dtype is required on the tested versions (`dtype` became
+mandatory in 1.33). Match the schema to the actual payload:
+
+```python
+payload_dtype = pl.Struct({"a": pl.Int64, "b": pl.Boolean})
+lf.select(pl.col("payload").str.json_decode(payload_dtype)).collect()
 ```
 
 ---
@@ -291,6 +317,11 @@ Caveats:
   Call `.as_expr()` first when you want the expression meaning instead —
   e.g. `(~cs.boolean().as_expr())` to negate boolean *values* rather than
   take the complement of the selected columns.
+- **Polars 2.0:** combining a selector with `pl.col(...)` via `&`, `|`, or
+  `^` no longer performs a column-set operation; it becomes an element-wise
+  operator and can silently compute columns instead of selecting them. Use a
+  selector on both sides, e.g.
+  `cs.integer() & cs.by_name("id")`.
 - Expansion that matches nothing produces no columns rather than an error, so
   a typo'd pattern shows up as a missing (or empty) result, not an exception.
 
@@ -313,6 +344,12 @@ pl.col("date_int").cast(pl.Date)           # epoch days to Date
 lf.collect_schema()["col_name"]
 ```
 
+On Polars 2.0, casting a String column directly to `Date`, `Datetime`, or
+`Time` is removed. Parse with `str.to_date()` / `str.to_datetime()` /
+`str.to_time()`, then cast only the resulting temporal type if needed.
+Integer ↔ categorical casts were also removed; use `.cat.to(dtype)` and
+`.cat.physical()`. See `version-2.md`.
+
 ---
 
 ## when / then / otherwise
@@ -322,17 +359,16 @@ values in `pl.lit()`.
 
 ```python
 # Basic conditional
-pl.when(pl.col("age") >= 18)
-  .then(pl.lit("adult"))
-  .otherwise(pl.lit("minor"))
-  .alias("age_group")
+pl.when(pl.col("age") >= 18).then(pl.lit("adult")).otherwise(
+    pl.lit("minor")
+).alias("age_group")
 
 # Multiple conditions (CASE WHEN)
-pl.when(pl.col("score") >= 90).then(pl.lit("A"))
-  .when(pl.col("score") >= 80).then(pl.lit("B"))
-  .when(pl.col("score") >= 70).then(pl.lit("C"))
-  .otherwise(pl.lit("F"))
-  .alias("grade")
+pl.when(pl.col("score") >= 90).then(pl.lit("A")).when(
+    pl.col("score") >= 80
+).then(pl.lit("B")).when(pl.col("score") >= 70).then(pl.lit("C")).otherwise(
+    pl.lit("F")
+).alias("grade")
 
 # Null handling
 pl.col("v").fill_null(0)
@@ -341,9 +377,9 @@ pl.col("v").fill_null(strategy="forward")     # also: "backward"
 # SUM(CASE WHEN ...) inside agg() — then() can take another column
 lf.group_by("dept").agg(
     pl.when(pl.col("status") == "active")
-      .then(pl.col("salary"))
-      .otherwise(pl.lit(0))
-      .sum()
-      .alias("active_payroll")
+    .then(pl.col("salary"))
+    .otherwise(pl.lit(0))
+    .sum()
+    .alias("active_payroll")
 )
 ```

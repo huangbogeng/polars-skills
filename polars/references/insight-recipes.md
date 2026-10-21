@@ -11,9 +11,9 @@ Throughout, `lf` is a LazyFrame, e.g.
 ## Contents
 
 Top N by Y; top N per group; change vs. previous period; share of total;
-distribution; trend over time (resampling); conditional breakdown;
-above/below group average; distinct counts; sanity checks before presenting
-an answer.
+distribution; trend over time (resampling); trailing/sliding windows;
+conditional breakdown; above/below group average; distinct counts; sanity
+checks before presenting an answer.
 
 ---
 
@@ -37,33 +37,59 @@ an answer.
 (
     lf.group_by("region", "product")
     .agg(pl.col("revenue").sum().alias("total"))
-    .filter(
-        pl.col("total").rank("dense", descending=True).over("region") <= 3
-    )
-    .sort("region", "total", descending=[False, True])
+    .sort("region", "total", "product", descending=[False, True, False],
+          nulls_last=True)
+    .group_by("region", maintain_order=True)
+    .head(3)
     .collect()
 )
 ```
+
+This returns at most three products per region, breaking revenue ties by
+product name. If the user wants all products in the top three distinct
+revenue levels, use dense rank instead and explain that it can exceed three
+rows. Apply a deterministic tie-breaker to global top-k too when required.
 
 ## "How did X change vs. the previous period?"
 
+Match the previous **calendar month**, leaving growth null for a missing,
+null, or zero previous value:
+
 ```python
-(
+monthly = (
     lf.group_by(pl.col("date").dt.truncate("1mo").alias("month"))
     .agg(pl.col("revenue").sum().alias("revenue"))
+)
+previous = monthly.select(
+    pl.col("month").dt.offset_by("1mo"),
+    pl.col("revenue").alias("prev"),
+)
+(
+    monthly.join(previous, on="month", how="left", validate="1:1")
+    .with_columns(
+        growth_pct=pl.when(pl.col("prev").is_not_null() & (pl.col("prev") != 0))
+        .then((pl.col("revenue") / pl.col("prev") - 1) * 100)
+        .otherwise(None)
+    )
     .sort("month")
-    .with_columns(
-        prev=pl.col("revenue").shift(1),
-    )
-    .with_columns(
-        growth_pct=(pl.col("revenue") / pl.col("prev") - 1) * 100,
-    )
     .collect()
 )
 ```
 
-Per-group variant: `.shift(1).over("region")`, sorted by
-`("region", "month")` first. State the definition used in the answer.
+For per-region growth, include `region` in the aggregation, in `previous`,
+and in the join keys. A plain `shift(1)` compares consecutive observed rows,
+which can skip missing months. Do not fill a missing month with zero unless
+absence means zero in the data contract.
+
+`sum()` over a **typed** column returns `0` for a group whose values are
+all null (and for an `expr.filter(...)` subset with no matches), but
+`null` when the column's dtype is `Null`. A column created from an
+all-`None` Python list gets dtype `Null`, so `sum()` there stays `null`.
+Before you present a total, decide which case means "unknown" for the
+contract: an unknown month summed by `sum()` becomes `0`, and feeding
+that to the growth formula reports `-100%` rather than missing data. Use
+`.is_null().all()` on the source values, or validate the monthly totals
+against the expected calendar, when unknown must stay distinct from zero.
 
 ## "What share does each X have of the total?"
 
@@ -72,7 +98,9 @@ Per-group variant: `.shift(1).over("region")`, sorted by
     lf.group_by("category")
     .agg(pl.col("revenue").sum().alias("revenue"))
     .with_columns(
-        share_pct=pl.col("revenue") / pl.col("revenue").sum() * 100
+        share_pct=pl.when(pl.col("revenue").sum() != 0)
+        .then(pl.col("revenue") / pl.col("revenue").sum() * 100)
+        .otherwise(None)
     )
     .sort("share_pct", descending=True)
     .collect()
@@ -99,11 +127,14 @@ broadcasts. The same trick works pre-aggregation with
     )
     .collect()
 )
+```
 
-# Binning: fixed edges with cut, equal-sized buckets with qcut
+Quantile bins on **Polars 1.44.2**:
+
+```python
 (
     lf.with_columns(
-        bucket=pl.col("order_value").qcut(4, labels=["q1", "q2", "q3", "q4"])
+        bucket=pl.col("order_value").qcut(4, allow_duplicates=True)
     )
     .group_by("bucket")
     .agg(pl.len().alias("n"), pl.col("order_value").mean().alias("avg"))
@@ -111,6 +142,28 @@ broadcasts. The same trick works pre-aggregation with
     .collect()
 )
 ```
+
+`qcut` can produce duplicate quantile boundaries on tied data. This example
+allows fewer bins and keeps interval labels; it does not promise four
+equally sized groups. Choose another tie policy if the task requires one.
+
+For new **Polars 2.0** code, use `bin_quantiles`; `qcut` is deprecated:
+
+```python
+(
+    lf.with_columns(bucket=pl.col("order_value").bin_quantiles(4, labels=False))
+    .group_by("bucket")
+    .agg(pl.len().alias("n"), pl.col("order_value").mean().alias("avg"))
+    .sort("bucket")
+    .collect()
+)
+```
+
+`bin_quantiles` keeps equal values together and can leave bins empty;
+`labels=False` returns integer bin IDs. Its breakpoints use order statistics
+and its intervals are left-closed by default, while legacy `qcut` uses
+interpolated quantiles and right-closed intervals. They are not equivalent
+replacements in a migration that must preserve exact group membership.
 
 ## "How does X trend over time?" (resampling)
 
@@ -126,9 +179,49 @@ broadcasts. The same trick works pre-aggregation with
 )
 ```
 
-`group_by_dynamic` requires a sorted time column. `every` accepts
-durations like `"1d"`, `"1w"`, `"1mo"`, `"1q"`, `"1y"`; add `group_by=`
-for one series per category.
+`group_by_dynamic` requires a sorted time column. With `period=every` and
+`closed="left"`, it collapses time into non-overlapping buckets. `every`
+accepts durations like `"1d"`,
+`"1w"`, `"1mo"`, `"1q"`, `"1y"`; add `group_by=` for one series per category.
+Tune windows with `period=` (bucket width, defaults to `every`), `offset=`,
+`closed="left"` and `label="left"` (both default to `"left"`), and
+`include_boundaries=True` to emit `_lower_boundary`/`_upper_boundary`.
+Other `period`/`closed` choices can overlap windows; empty windows are not
+automatically emitted.
+
+## "What is the trailing N-day value?" (sliding windows)
+
+Resampling groups time into buckets; a *sliding* window keeps one row per
+input and aggregates the trailing span — what "7-day trailing average" or
+"running 30-day sum" means. Two forms with the same trailing-mean values on
+the tested versions (the expression form also keeps the input columns):
+
+```python
+# window groups: one row per input row, window ending at that row
+(
+    lf.sort("ts")
+    .rolling("ts", period="7d")
+    .agg(pl.col("revenue").mean().alias("rev_7d"))
+    .collect()
+)
+
+# expression form: same result, usable inside with_columns
+lf.sort("ts").with_columns(
+    pl.col("revenue").rolling_mean_by("ts", "7d").alias("rev_7d")
+).collect()
+```
+
+- `.rolling(index, period=...)` needs a sorted temporal key; add
+  `group_by="sym"` for one window per category. `closed="right"` (default)
+  includes the current row's timestamp.
+- Duration windows on **irregular** timestamps: `rolling_*_by(col, window)`
+  for `mean`, `sum`, `min`, `max`, `std`, `var`, `quantile` — `quantile` is
+  keyword-only (`rolling_quantile_by("ts", "7d", quantile=0.9)`).
+  `min_samples=` controls how many leading rows stay null.
+- Weighted decay instead of a flat window: `ewm_mean_by("ts",
+  half_life="2d")` (half-life is keyword-only).
+- For a fixed **row count** (last N rows, not N days) drop the `_by`:
+  `rolling_mean(window_size=N)`, with `center=True` to center the window.
 
 ## "Break X down by whether/which ..." (conditional breakdown)
 
@@ -147,7 +240,9 @@ for one series per category.
 ```
 
 `expr.filter()` inside `agg` aggregates a subset per group; summing a boolean
-counts how often it is true.
+counts how often it is true. When no row in a group satisfies the predicate
+or every value is null, the filtered `sum()` is `0`, not `null` — see the
+growth recipe.
 
 ## "Which X are above/below their group average?" (window)
 
@@ -177,7 +272,8 @@ counts how often it is true.
 ```
 
 `pl.len()` counts rows including nulls; `.count()` counts non-null values of
-a column — pick deliberately.
+a column. `n_unique()` includes null as a distinct value; use
+`.drop_nulls().n_unique()` when only known IDs should count.
 
 ---
 
@@ -193,8 +289,9 @@ result.null_count()                # unexpected nulls from a join or cast?
 lf.select(pl.len()).collect()      # input row count for a gut check
 ```
 
-If a join produced more rows than the left input, the key was not unique
-on the right side. If an aggregate is null, the source column likely
+If an inner/left equi-join produced more rows than the left input, matched
+keys were not unique on the right. Other joins can grow for different
+reasons. If an aggregate is null, the source column may have
 contained only nulls after filtering, or a cast with `strict=False`
 nulled unparsable values; check `lf.head().collect()` for dirty data and
 move cleaning into the scan (`null_values=[...]`).
