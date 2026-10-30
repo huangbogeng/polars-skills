@@ -11,8 +11,9 @@ with a single `collect()`.
 Starting a lazy query; starting from an in-memory DataFrame; scan options
 that prevent downstream pain; schema discovery before execution;
 inspecting the plan; executing; larger-than-memory streaming and sinks
-(including the 2.0 streaming default and its ordering implications);
-compute performance levers (dtypes, categoricals, memory).
+(including the 2.x streaming default, its ordering implications, and 2.1
+out-of-core group-by/window spilling); encrypted Parquet; compute
+performance levers (dtypes, categoricals, memory).
 
 ## Starting a lazy query
 
@@ -121,7 +122,7 @@ The streaming engine can reduce peak memory by executing supported operations
 in chunks. Some operations still need substantial memory, and `collect()`
 materializes the final output.
 
-On **Polars 2.0**, `engine="auto"` (the default) resolves to the streaming
+On **Polars 2.x**, `engine="auto"` (the default) resolves to the streaming
 engine for lazy queries, so a plain `lf.collect()` is already streaming.
 Eager `DataFrame` operations still use the in-memory engine. The streaming
 engine does not guarantee row order for operations that do not require it —
@@ -138,8 +139,26 @@ To restore the 1.x default, pass `engine="in-memory"` per query, set
 `POLARS_ENGINE_AFFINITY=in-memory`. `explain()` still renders the optimized
 IR plan unless `engine="streaming"` is passed explicitly. On 1.x, passing
 `engine="streaming"` is opt-in and `maintain_order` on joins depends on the
-installed version; verify it. See `version-2.md` for the full set of 2.0
+installed version; verify it. See `version-2.md` for the full set of 2.x
 changes.
+
+On **Polars 2.1**, the streaming engine can spill `group_by` and `over`
+window state to disk. A high-cardinality aggregation that previously
+exhausted memory can finish under a budget without changing the query.
+Configure it with environment variables set before importing Polars:
+
+```python
+import os
+
+os.environ["POLARS_OOC_MEMORY_BUDGET_MB"] = "200"  # spill budget
+os.environ["POLARS_OOC_LOG_METRICS"] = "1"         # log spill/prefetch stats
+
+import polars as pl
+```
+
+`POLARS_OOMKILL_THRESHOLD_FRACTION` sets an out-of-memory kill threshold.
+Spilling trades speed for memory: leave the budget unset when the query
+fits, and use `engine="in-memory"` to opt out.
 
 For large outputs, sink straight to disk:
 
@@ -151,6 +170,29 @@ lf.sink_ndjson("out.ndjson")
 
 Use streaming or sinks when the input is much larger than memory, or when a
 regular `collect()` is killed by the OS.
+
+## Encrypted Parquet
+
+2.1 reads and writes Parquet modular encryption. Pass property objects to
+`read_parquet(decryption=...)` / `write_parquet(encryption=...)`; keys are
+bytes, and `column_keys` maps column names to per-column keys.
+
+```python
+key = b"0123456789012345"
+encryption = pl.ParquetEncryptionProperties(footer_key=key)
+df.write_parquet("secure.parquet", encryption=encryption)
+
+result = pl.read_parquet(
+    "secure.parquet",
+    decryption=pl.ParquetDecryptionProperties(footer_key=key),
+)
+```
+
+With any `column_keys`, only the named columns are encrypted and the others
+are written unencrypted. `plaintext_footer=True` lets readers without the
+footer key see the schema and unencrypted columns; the footer is still
+signed. Encryption is unstable in 2.1; keep keys out of source control and
+out of serialized query plans.
 
 ## Compute performance levers
 
@@ -188,5 +230,6 @@ df.estimated_size()   # in-memory bytes
 df.n_chunks()         # fragmentation; many chunks -> rechunk after concat
 ```
 
-`.profile()` is deprecated as of 1.44 — it timed the old in-memory engine
-and misreports under streaming. Use `explain()` to inspect the plan.
+`.profile()` was deprecated in 1.44 and removed in 2.0 — it timed the old
+in-memory engine and misreports under streaming. Use `explain()` to inspect
+the plan.

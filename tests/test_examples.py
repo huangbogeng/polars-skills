@@ -13,10 +13,16 @@ import polars as pl
 import polars.selectors as cs
 from polars.testing import assert_frame_equal
 
+try:
+    import numpy as np
+except ImportError:  # NumPy is optional; masked-array tests skip without it.
+    np = None
+
 
 SKILL = Path(__file__).resolve().parents[1] / "polars"
 FILES = Path(__file__).resolve().parents[1] / "evals" / "files"
-MAJOR = int(pl.__version__.split(".")[0])
+VERSION = tuple(int(part) for part in pl.__version__.split(".")[:2])
+MAJOR = VERSION[0]
 
 
 def executable_blocks(reference, heading, block=0, *, lf=None):
@@ -346,6 +352,103 @@ class Version2Examples(unittest.TestCase):
             pl.Series(["2022-08-30"]).str.to_date().to_list(),
             [date(2022, 8, 30)],
         )
+
+
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 behavior")
+class Version21Examples(unittest.TestCase):
+    def test_eager_mixed_string_numeric_arithmetic_raises(self):
+        with self.assertRaises(pl.exceptions.InvalidOperationError):
+            pl.Series([1, 2]) + "4"
+        run_example("version-2.md", "## Polars 2.1 changes")
+
+    def test_truncdiv_rounds_toward_zero(self):
+        scope = run_example("version-2.md", "## Polars 2.1 changes", block=1)
+        self.assertEqual(scope["result"]["floor"].to_list(), [-3, -2, 2, 2])
+        self.assertEqual(scope["result"]["trunc"].to_list(), [-2, -2, 2, 2])
+
+    def test_full_join_where_keeps_unmatched_rows(self):
+        result = example(
+            "joins.md", "## join_where — inequality / non-equi / range joins",
+            block=1,
+            events=pl.LazyFrame({"ts": [1, 2, 3]}),
+            windows=pl.LazyFrame({"start": [1], "end": [3]}),
+        ).collect().sort("ts")
+        self.assertEqual(result["ts"].to_list(), [1, 2, 3])
+        self.assertEqual(result["start"].to_list(), [1, 1, None])
+
+    def test_encrypted_parquet_round_trip(self):
+        key = b"0123456789012345"
+        frame = pl.DataFrame({"id": [1, 2], "secret": ["a", "b"]})
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "secure.parquet"
+            frame.write_parquet(
+                path,
+                encryption=pl.ParquetEncryptionProperties(footer_key=key),
+            )
+            result = pl.read_parquet(
+                path,
+                decryption=pl.ParquetDecryptionProperties(footer_key=key),
+            )
+            with self.assertRaises(pl.exceptions.ComputeError):
+                pl.read_parquet(path)
+        assert_frame_equal(result, frame)
+
+    @unittest.skipUnless(np is not None, "NumPy is required")
+    def test_masked_numpy_round_trip(self):
+        scope = run_example("version-2.md", "## Polars 2.1 changes", block=2)
+        self.assertEqual(scope["array"].mask.tolist(), [False, True, False])
+        self.assertEqual(scope["back"].to_list(), [1, None, 3])
+
+
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 SQL behavior")
+class SqlExamples(unittest.TestCase):
+    def test_context_and_lazy_execution(self):
+        scope = run_example("sql.md", "## Context and registration")
+        self.assertEqual(scope["result"].collect().to_dicts(), [
+            {"region": "west", "total": 20},
+            {"region": "east", "total": 15},
+        ])
+        lazy = run_example("sql.md", "## Lazy execution")["lazy"]
+        self.assertIsInstance(lazy, pl.LazyFrame)
+        self.assertEqual(lazy.collect()["a"].to_list(), [2, 3])
+
+    def test_ctes_and_temp_tables(self):
+        recursive = run_example(
+            "sql.md", "## CTEs and recursive CTEs"
+        )["result"]
+        self.assertEqual(recursive["n"].to_list(), [1, 2, 3, 4, 5])
+        temporary = run_example(
+            "sql.md", "## Temp tables and CREATE"
+        )["result"]
+        self.assertEqual(temporary["a"].to_list(), [2, 3])
+
+    def test_asof_and_correlated_subqueries(self):
+        asof = run_example("sql.md", "## ASOF joins")["result"]
+        self.assertEqual(asof["qx"].to_list(), [None, 20])
+        correlated = run_example("sql.md", "## Subqueries")["result"]
+        self.assertEqual(correlated["group_max"].to_list(), [3, 3, 2])
+
+    def test_table_and_scalar_functions(self):
+        table = run_example("sql.md", "## Table functions")["result"]
+        self.assertEqual(table["x"].to_list(), [1, 2])
+        scope = run_example("sql.md", "## Scalar functions and time")
+        self.assertEqual(scope["result"]["first_replace"].to_list(), ["a_b-c"])
+        self.assertEqual(scope["result"]["all_replace"].to_list(), ["a_b_c"])
+        self.assertEqual(scope["series"]["n"].to_list(), [[1, 2, 3]])
+        self.assertEqual(scope["ranged"]["range"].to_list(), [1, 2, 3])
+        zoned = run_example(
+            "sql.md", "## Scalar functions and time", block=1
+        )["result"]
+        self.assertEqual(zoned.schema["ts"], pl.Datetime("us", "UTC"))
+
+    def test_types_and_qualified_names(self):
+        typed = run_example("sql.md", "## Types and casts")["result"]
+        self.assertEqual(typed.schema["s"], pl.Struct({
+            "y": pl.String, "x": pl.Int64, "z": pl.Float64,
+        }))
+        run_example("sql.md", "## Types and casts", block=1)
+        qualified = run_example("sql.md", "## Qualified names")["result"]
+        self.assertEqual(qualified["a"].to_list(), [1, 2])
 
 
 class ContextExamples(unittest.TestCase):

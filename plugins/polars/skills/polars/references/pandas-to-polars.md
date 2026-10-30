@@ -107,6 +107,9 @@ likely to appear in translated pandas code:
 - `qcut()` / `cut()` are deprecated → `bin_quantiles()` / `bin_intervals()`.
 - Lazy collection defaults to streaming and may reorder rows; sort or use
   `maintain_order` when the pandas result's order is part of the contract.
+- On Polars 2.1, mixed string/numeric arithmetic raises in eager code too
+  (`df["id"] + "_x"` no longer stringifies implicitly); cast the numeric side
+  with `.cast(pl.String)` first.
 
 ## Polars-specific correctness traps
 

@@ -7,15 +7,17 @@ description: >
   migrations from pandas to Polars; debugging or speeding up existing Polars
   code; and Python tabular analysis on CSV, Parquet, or DataFrames when no
   library has been chosen, even if the user never says "Polars". Covers
-  single-node CPU Polars, including streaming. Scope is single-node: Polars
-  Cloud, On-Prem, distributed, and GPU workloads are out of scope.
+  single-node CPU Polars, including streaming, Polars SQL, and Iceberg
+  tables. Scope is single-node: Polars Cloud, On-Prem, distributed, and GPU
+  workloads are out of scope.
 license: MIT
 metadata:
   author: Polars
   homepage: https://pola.rs
   tags: polars, dataframes, lazyframe, data-processing, data-analysis, python
-compatibility: Python 3.10+. Examples are tested with Polars 1.44.2 and
-  2.0.0; verify API availability and behavior on other versions.
+compatibility: Polars 2.1 requires Python 3.11+; Polars 1.44.2 and 2.0
+  require 3.10+. Examples are tested with 1.44.2, 2.0.0, and 2.1.0; verify
+  API availability and behavior on other versions.
 ---
 
 # Polars
@@ -170,6 +172,10 @@ Each of these fails silently or with a confusing error.
 - **Null comparisons drop rows silently.** `filter(pl.col("v") > 2)`
   excludes nulls because `null > 2` is null, which is falsy. If nulls
   should be kept: `(pl.col("v") > 2) | pl.col("v").is_null()`.
+- **Polars 2.1 rejects mixed string/numeric arithmetic in eager code too.**
+  `pl.Series([1, 2]) + "4"` used to return `["14", "24"]`; both engines now
+  raise `InvalidOperationError`. Cast first:
+  `pl.Series([1, 2]).cast(pl.String) + "4"`.
 - **Use `&`, `|`, `~` with parentheses around each condition.** Python's
   `and`/`or`/`not` raise on expressions, and without parentheses operator
   precedence binds the comparison wrong:
@@ -188,7 +194,7 @@ Each of these fails silently or with a confusing error.
   dtypes — use a selector instead.
 - **Nulls don't match in joins by default.** Rows with null keys silently
   drop out of inner joins; pass `nulls_equal=True` if they should match.
-- **On Polars 2.0, lazy row order is not guaranteed.** `collect()` defaults
+- **On Polars 2.x, lazy row order is not guaranteed.** `collect()` defaults
   to the streaming engine, which may reorder joins, `group_by`, and
   `unpivot`. Sort explicitly or use `maintain_order` when the consumer
   depends on order; see `references/version-2.md`.
@@ -198,12 +204,14 @@ Each of these fails silently or with a confusing error.
 
 ## Version and API verification
 
-Examples target Polars 1.44.2 and 2.0.0, not every 1.x release. Check
-`python -c "import polars as pl; print(pl.__version__)"` in the project's
-interpreter. Code written for 1.x must be re-checked on 2.0: the streaming
-engine is now the lazy default, several casts were removed, and some
-operations changed results silently. Read `references/version-2.md` when
-upgrading or when the project pins 2.x.
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0, not every 1.x release.
+Check `python -c "import polars as pl; print(pl.__version__)"` in the
+project's interpreter. Code written for 1.x must be re-checked on 2.x: the
+streaming engine is now the lazy default, several casts were removed, and
+some operations changed results silently. On 2.1, Python 3.11+ is required,
+eager mixed string/numeric arithmetic raises, and streaming `group_by` /
+`over` can spill to disk. Read `references/version-2.md` when upgrading or
+when the project pins 2.x.
 
 Verify uncertain APIs against the installed version:
 
@@ -230,8 +238,8 @@ Read the relevant sections when their detail is needed. Each file opens with
 a `## Contents` line; unrelated references need not be loaded.
 
 - **Upgrading from Polars 1.x or running 2.x** — read
-  `references/version-2.md` for streaming-order, cast, dtype, SQL, and
-  removed-API changes that alter results without raising.
+  `references/version-2.md` for streaming-order, cast, dtype, SQL, 2.1
+  changes, and removed-API changes that alter results without raising.
 - **Translating pandas → Polars** — read
   `references/pandas-to-polars.md` for
   API-difference traps absent from this file.
@@ -252,5 +260,11 @@ a `## Contents` line; unrelated references need not be loaded.
   fetch-map described above.
 - `references/lazy-api.md` — scan options for dirty data, query plan
   inspection with `explain()`, streaming engine for larger-than-memory
-  data, `sink_parquet`, and compute performance levers (dtypes,
-  categoricals, memory).
+  data (including 2.1 out-of-core `group_by` / `over`), encrypted Parquet,
+  `sink_parquet`, and compute performance levers (dtypes, categoricals,
+  memory).
+- `references/sql.md` — `SQLContext`, lazy SQL execution, CTEs including
+  2.1 recursive CTEs, temp tables, `ASOF JOIN ... MATCH_CONDITION`,
+  subqueries, table functions, SQL functions/types, and gotchas.
+- `references/iceberg.md` — 2.1 `scan_iceberg`, `sink_iceberg` /
+  `write_iceberg`, `delete_iceberg`, and SQL catalog attachment plus DDL.

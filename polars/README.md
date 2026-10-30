@@ -19,8 +19,11 @@ has been chosen. It teaches agents to:
   `group_by`, `over`)
 - Preserve calculation semantics while avoiding unnecessary materialization
 - Avoid pandas API habits that produce wrong or slow results in Polars
-- Handle Polars 2.0 behavior changes: streaming-default row order, removed
-  casts, `explode` row counts, and renamed APIs
+- Handle Polars 2.x behavior changes: streaming-default row order, removed
+  casts, `explode` row counts, renamed APIs, and 2.1's stricter eager
+  arithmetic and out-of-core group-bys
+- Use Polars SQL (including 2.1 recursive CTEs, temp tables, and ASOF joins)
+  and 2.1 Iceberg scans, sinks, deletes, and SQL catalogs
 
 ## Installation
 
@@ -125,7 +128,8 @@ See the GitHub Copilot Agent Skills documentation for the correct path.
 This skill covers single-node Polars only. It does not apply to Polars Cloud,
 On-Prem deployments, distributed workloads, or GPU execution.
 
-Examples are tested with Python 3.10 and Polars **1.44.2** and **2.0.0**.
+Examples are tested with Python 3.10 and Polars **1.44.2** / **2.0.0**, and
+with Python 3.11 and Polars **2.1.0**. Polars 2.1 requires Python 3.11+.
 Other versions require API verification; this is not a promise that every
 Polars 1.x release supports the examples. `stable` documentation follows the
 latest release, so check local signatures or matching-version docs.
@@ -146,10 +150,12 @@ polars/
     ├── expressions.md          # str, dt, list, struct, selectors, cast, when/then
     ├── insight-recipes.md      # natural-language question to query recipes
     ├── joins.md                # equi/asof/where/cross joins, validate, fan-out
-    ├── lazy-api.md             # scan options, query plan inspection, streaming
+    ├── iceberg.md              # scan/sink/delete Iceberg tables and SQL catalogs (2.1)
+    ├── lazy-api.md             # scan options, query plan inspection, streaming, encryption
     ├── pandas-to-polars.md     # API pattern differences and correctness traps
     ├── reshaping.md            # pivot, unpivot, transpose, concat, explode, gather
-    └── version-2.md            # Polars 2.0 streaming, cast, dtype, and API changes
+    ├── sql.md                  # SQLContext, CTEs, temp tables, ASOF joins, table functions
+    └── version-2.md            # Polars 2.x streaming, cast, dtype, SQL, and 2.1 changes
 ```
 
 Reference files are loaded on demand. The agent reads them only when the

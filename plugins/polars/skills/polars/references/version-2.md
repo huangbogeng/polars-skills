@@ -1,25 +1,27 @@
-# Polars 2.0: Correctness Changes
+# Polars 2.x: Correctness Changes
 
 Load this file when the project runs Polars 2.x, or when upgrading code
-written for 1.x. The complete list is the official upgrade guide:
+written for 1.x. The 2.0 changes are covered by the official upgrade guide:
 https://docs.pola.rs/releases/upgrade/2/
+and the 2.1 additions by the release notes:
+https://github.com/pola-rs/polars/releases/tag/py-2.1.0
 
 This page covers changes that alter results **without raising** and removals
-that common data-analysis code hits first. Each example is executable on
-Polars 2.0.0.
+that common data-analysis code hits first. Examples marked 2.0 run on 2.0.0;
+the 2.1 section runs on 2.1.0.
 
 ## Contents
 
 Version check; execution order (streaming default); `concat` and `explode`;
-casts and dtypes; expressions and selectors; SQL; removed names; migration
-checklist.
+casts and dtypes; expressions and selectors; SQL; 2.1 changes (Python 3.11,
+eager arithmetic, out-of-core, new APIs); removed names; migration checklist.
 
 ## Check the version first
 
 ```python
 import polars as pl
 
-print(pl.__version__)  # "2.x" enables the behavior below; 1.x does not
+print(pl.__version__)  # "2.x" enables the behavior below; "2.1+" adds the 2.1 section
 ```
 
 Run the project's tests on both sides of an upgrade. A passing import check
@@ -186,6 +188,90 @@ SQL numeric semantics also changed: exact numeric literals are `Decimal`,
 decimal `*`/`/` use SQL scales, and `%` / `DIV` truncate toward zero. Cast
 the SQL result when Python-side float behavior is required.
 
+## Polars 2.1 changes
+
+Polars 2.1 keeps the 2.0 execution defaults. These are the changes most
+likely to affect data code; the complete list is the release notes linked
+above.
+
+**Python 3.11+ and strict arithmetic.**
+
+Polars 2.1 wheels require **Python 3.11 or newer**; Python 3.10 support was
+dropped. Mixed string/numeric arithmetic now raises in eager code too, so
+`pl.Series([1, 2]) + "4"` no longer produces `["14", "24"]`. Cast the
+numeric side explicitly:
+
+```python
+import polars as pl
+
+try:
+    pl.Series([1, 2]) + "4"
+except pl.exceptions.InvalidOperationError:
+    pass  # eager now matches lazy: no implicit string conversion
+
+assert (pl.Series([1, 2]).cast(pl.String) + "4").to_list() == ["14", "24"]
+```
+
+`Expr.truncdiv` adds integer division that rounds toward zero, unlike
+`floordiv`, which rounds down:
+
+```python
+df = pl.DataFrame({"x": [-5, -4, 4, 5]})
+result = df.select(
+    pl.col("x").floordiv(2).alias("floor"),
+    pl.col("x").truncdiv(2).alias("trunc"),
+)
+assert result["floor"].to_list() == [-3, -2, 2, 2]
+assert result["trunc"].to_list() == [-2, -2, 2, 2]
+```
+
+**Out-of-core group-by and windows.**
+
+The streaming engine can now spill `group_by` and `over` window state to
+disk, so high-cardinality aggregations that previously ran out of memory can
+finish under a budget. Lazy `collect()` already resolves to streaming on
+2.x, so no query change is required. Budget and logging are controlled by
+environment variables set before importing Polars; see `lazy-api.md` for the
+settings and trade-offs.
+
+**New API surface.**
+
+- `join_where(..., how=...)` accepts `"inner"`, `"left"`, `"right"`, and
+  `"full"`; 2.1 adds the right/full variants.
+- SQL adds recursive CTEs, `CREATE [OR REPLACE] TEMP TABLE`, `ASOF JOIN`,
+  correlated subqueries, `generate_series`/`range`, `REGEXP_REPLACE`,
+  `DATE_TRUNC`, `CURRENT_DATE`/`CURRENT_TIME`/`CURRENT_TIMESTAMP`,
+  time-zone-aware timestamps, `STRUCT`/`MAP` type names, qualified table
+  names, and `read_ndjson` / path lists in `read_*` table functions.
+- Parquet encryption: `read_parquet(..., decryption=...)` and
+  `write_parquet(..., encryption=...)` take
+  `pl.ParquetDecryptionProperties` / `pl.ParquetEncryptionProperties`
+  (unstable).
+- Iceberg: `SQLContext.register_catalog`, `CREATE TABLE` / `DROP TABLE
+  [PURGE]`, `pl.delete_iceberg`, and `sink_iceberg` options
+  `create_if_not_exists`, `create_namespace_if_not_exists`, and
+  `overwrite_filter`.
+- `reinterpret` supports `Int128` ↔ `Decimal`.
+
+**Masked NumPy arrays.** `to_numpy(masked=True)` returns a
+`numpy.ma.MaskedArray` that preserves the column dtype and masks nulls;
+constructors accept masked arrays in the other direction. This is unstable
+in 2.1 and requires NumPy.
+
+```python
+import numpy as np
+
+series = pl.Series([1, None, 3], dtype=pl.Int64)
+array = series.to_numpy(masked=True)
+assert array.mask.tolist() == [False, True, False]
+
+back = pl.Series(np.ma.array([1, 2, 3], mask=[False, True, False]))
+assert back.to_list() == [1, None, 3]
+```
+
+Plain `to_numpy()` still converts integer nulls to `NaN` in a float array;
+use `masked=True` when the dtype and null mask must survive the round trip.
+
 ## Removed names that data code hits first
 
 | Removed | Use instead |
@@ -212,3 +298,5 @@ the SQL result when Python-side float behavior is required.
    just values — on representative fixtures.
 4. Make ordering explicit wherever the consumer depends on it.
 5. Re-check null behavior around `explode`, casts, and `is_in`.
+6. On 2.1, confirm Python 3.11+, replace implicit string/numeric arithmetic
+   with an explicit cast, and audit `join_where(how=...)` values.

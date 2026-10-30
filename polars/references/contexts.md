@@ -98,7 +98,7 @@ a comparison against null is null; add `| pl.col("v").is_null()` to keep them.
 One output row per unique group; output columns are the grouping keys plus
 the aggregations. Group order is not guaranteed; `maintain_order=True`
 keeps first-seen group order (costs some parallelism). This matters more on
-Polars 2.0, where lazy collection defaults to the streaming engine. Sort the
+Polars 2.x, where lazy collection defaults to the streaming engine. Sort the
 result when the consumer expects an order.
 
 ```python

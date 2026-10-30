@@ -12,9 +12,9 @@ casting; `when / then / otherwise`.
 
 ## Finding & verifying expressions in the API reference
 
-Examples target Polars 1.44.2 and 2.0.0. Verify uncertain methods against
-the project's installed version using `help()`, `inspect.signature()`, or
-matching-version official documentation.
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0. Verify uncertain methods
+against the project's installed version using `help()`,
+`inspect.signature()`, or matching-version official documentation.
 
 **Prefer the bundled lookup** for the installed version, with no MCP or
 network: `python scripts/polars_api.py doc Expr.str.contains` (also
@@ -38,7 +38,7 @@ namespace. The category map below routes to the appropriate section.
 | `is_between`, `is_in`, `is_duplicated`, `is_unique`, `any`, `all`, `not_` | `boolean` |
 | `cat.*` — categoricals | `categories` |
 | `alias`, `exclude`, column references | `columns` |
-| `abs`, `log`, `sqrt`, trig, `rank`, `rolling_*`, `cum_*`, `diff`, `pct_change`, `hist`, `rolling_mean_by`/`rolling_sum_by`/`rolling_*_by` (rolling on irregular timestamps), `ewm_mean_by`, `replace`, `replace_strict` | `computation` |
+| `abs`, `log`, `sqrt`, trig, `floordiv`, `truncdiv`, `rank`, `rolling_*`, `cum_*`, `diff`, `pct_change`, `hist`, `rolling_mean_by`/`rolling_sum_by`/`rolling_*_by` (rolling on irregular timestamps), `ewm_mean_by`, `replace`, `replace_strict` | `computation` |
 | `ext.*` — custom extension types | `extension` |
 | `pl.when`, `pl.lit`, `pl.col`, `pl.coalesce`, `pl.all_horizontal`, `pl.sum_horizontal`, `pl.concat_str`, `pl.int_range`, `pl.struct`, `pl.date_range`, `pl.datetime_range`, `pl.date_ranges`, `pl.datetime_ranges`, `pl.arg_sort_by`, `pl.business_day_count`, `pl.sql_expr` | `functions` |
 | `list.*` | `list` |
@@ -317,7 +317,7 @@ Caveats:
   Call `.as_expr()` first when you want the expression meaning instead —
   e.g. `(~cs.boolean().as_expr())` to negate boolean *values* rather than
   take the complement of the selected columns.
-- **Polars 2.0:** combining a selector with `pl.col(...)` via `&`, `|`, or
+- **Polars 2.0+:** combining a selector with `pl.col(...)` via `&`, `|`, or
   `^` no longer performs a column-set operation; it becomes an element-wise
   operator and can silently compute columns instead of selecting them. Use a
   selector on both sides, e.g.
@@ -344,7 +344,7 @@ pl.col("date_int").cast(pl.Date)           # epoch days to Date
 lf.collect_schema()["col_name"]
 ```
 
-On Polars 2.0, casting a String column directly to `Date`, `Datetime`, or
+On Polars 2.x, casting a String column directly to `Date`, `Datetime`, or
 `Time` is removed. Parse with `str.to_date()` / `str.to_datetime()` /
 `str.to_time()`, then cast only the resulting temporal type if needed.
 Integer ↔ categorical casts were also removed; use `.cat.to(dtype)` and

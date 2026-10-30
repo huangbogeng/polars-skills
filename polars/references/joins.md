@@ -5,7 +5,7 @@ joins (`join_where`), asserting key cardinality (`validate=`), cross
 products, or diagnosing a join that changed the row count. The basic
 inner / left / semi / anti semantics live in `contexts.md`.
 
-Examples target Polars 1.44.2 and 2.0.0. On older versions, verify
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0. On older versions, verify
 `join_where` availability/strategies and join parameter names;
 `nulls_equal` was named `join_nulls` before 1.24.
 
@@ -37,7 +37,7 @@ lf.join(other, on="id", how="inner", nulls_equal=True) # let null keys match
 - Null keys never match by default; `nulls_equal=True` makes null match
   null (see the join gotcha in `SKILL.md`). The old name `join_nulls` was
   removed in 2.0.
-- On Polars 2.0 the lazy API defaults to streaming and does not preserve
+- On Polars 2.x the lazy API defaults to streaming and does not preserve
   incidental row order. If the result must follow the left or right input,
   pass `maintain_order="left"` / `"right"` (equi-joins) or sort after
   collecting. See `version-2.md`.
@@ -95,10 +95,23 @@ events.join_where(                      # events falling inside a window
 )
 ```
 
-Multiple predicates are AND-ed. `how="inner"` (default) or `"left"`; a
-`suffix` renames right-side clashes. There is no `on=` — every condition is
-an expression over both frames — so the right key is not deduplicated and
-the result is many-to-many by construction.
+Multiple predicates are AND-ed. `how` accepts `"inner"` (default), `"left"`,
+`"right"`, and `"full"`; 2.1 adds the right/full variants. A `suffix`
+renames right-side clashes. There is no `on=` — every condition is an
+expression over both frames — so the right key is not deduplicated and the
+result is many-to-many by construction.
+
+```python
+events.join_where(                       # 2.1+: keep unmatched rows
+    windows,
+    pl.col("ts") >= pl.col("start"),
+    pl.col("ts") <  pl.col("end"),
+    how="full",
+)
+```
+
+A full `join_where` null-fills the side without a match, like a full equi
+join.
 
 ## Cross join
 
