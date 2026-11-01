@@ -353,6 +353,18 @@ class Version2Examples(unittest.TestCase):
             [date(2022, 8, 30)],
         )
 
+    def test_bin_intervals_matches_pandas_cut(self):
+        scope = run_example("pandas-to-polars.md", "## API patterns")
+        self.assertEqual(
+            scope["binned"].to_list(),
+            ["0-17", "0-17", "18-24", "55+", "55+"],
+        )
+
+
+class ExpressionExamples(unittest.TestCase):
+    def test_nan_is_not_null(self):
+        run_example("expressions.md", "## NaN vs null")
+
 
 @unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 behavior")
 class Version21Examples(unittest.TestCase):
@@ -411,6 +423,14 @@ class SqlExamples(unittest.TestCase):
         lazy = run_example("sql.md", "## Lazy execution")["lazy"]
         self.assertIsInstance(lazy, pl.LazyFrame)
         self.assertEqual(lazy.collect()["a"].to_list(), [2, 3])
+
+    def test_caller_scope_and_sql_expr(self):
+        run_example("sql.md", "## pl.sql and caller scope")
+        mixed = run_example("sql.md", "## Mixing SQL and expressions")
+        self.assertEqual(mixed["result"]["total"].to_list(), [20, 60])
+
+    def test_dialect(self):
+        run_example("sql.md", "## Dialect notes")
 
     def test_ctes_and_temp_tables(self):
         recursive = run_example(

@@ -8,8 +8,8 @@ with a single `collect()`.
 
 ## Contents
 
-Starting a lazy query; starting from an in-memory DataFrame; scan options
-that prevent downstream pain; schema discovery before execution;
+Starting a lazy query (including Delta Lake); starting from an in-memory
+DataFrame; scan options that prevent downstream pain; schema discovery;
 inspecting the plan; executing; larger-than-memory streaming and sinks
 (including the 2.x streaming default, its ordering implications, and 2.1
 out-of-core group-by/window spilling); encrypted Parquet; compute
@@ -21,8 +21,13 @@ performance levers (dtypes, categoricals, memory).
 lf = pl.scan_csv("data.csv")
 lf = pl.scan_parquet("data.parquet")      # also: scan_ndjson, scan_ipc
 lf = pl.scan_parquet("events/*.parquet")  # globs scan many files as one
+lf = pl.scan_delta("lake/orders")         # Delta Lake (polars[deltalake])
 lf = df.lazy()                            # from an eager DataFrame
 ```
+
+`scan_delta` is the lazy Delta entry point; `read_delta` materializes.
+`version=` selects a snapshot for time travel. Delta support requires the
+`deltalake` extra. Use `scan_iceberg` for Iceberg tables; see `iceberg.md`.
 
 ## Starting from an in-memory DataFrame
 

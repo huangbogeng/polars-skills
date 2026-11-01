@@ -8,7 +8,7 @@ nested data, or multi-type column selection.
 Finding & verifying expressions in the API reference; `str.*` (includes
 parsing strings to dates/datetimes); `dt.*` (includes window grouping on
 timestamps); `list.*`; `struct.*`; expression expansion & selectors;
-casting; `when / then / otherwise`.
+casting; null and NaN handling; `when / then / otherwise`.
 
 ## Finding & verifying expressions in the API reference
 
@@ -324,6 +324,38 @@ Caveats:
   `cs.integer() & cs.by_name("id")`.
 - Expansion that matches nothing produces no columns rather than an error, so
   a typo'd pattern shows up as a missing (or empty) result, not an exception.
+
+---
+
+## NaN vs null
+
+`null` is missing data; `NaN` is a valid floating-point value. They are not
+interchangeable:
+
+- `null_count()` ignores `NaN`; `is_null()` is false for `NaN`.
+- `fill_null()` does not fill `NaN`; use `fill_nan(...)`.
+- `drop_nulls()` keeps `NaN`.
+- `mean` / `sum` skip nulls but propagate `NaN`; replace `NaN` with null
+  first when it should be ignored.
+
+```python
+values = pl.DataFrame({"v": [1.0, None, float("nan")]})
+stats = values.select(
+    pl.col("v").null_count().alias("nulls"),
+    pl.col("v").is_nan().sum().alias("nans"),
+    pl.col("v").mean().alias("mean_with_nan"),
+    pl.col("v").fill_nan(None).mean().alias("mean_without_nan"),
+)
+assert stats["nulls"].to_list() == [1]
+assert stats["nans"].to_list() == [1]
+assert stats["mean_with_nan"].is_nan().to_list() == [True]
+assert stats["mean_without_nan"].to_list() == [1.0]
+assert values.drop_nulls("v").height == 2
+```
+
+`fill_nan(value)` replaces `NaN` with a value; `fill_nan(None)` converts
+`NaN` to null. `is_nan()` computes the mask (Polars does not store NaN
+metadata, unlike its validity bitmap for nulls).
 
 ---
 

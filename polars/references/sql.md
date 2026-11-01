@@ -6,15 +6,16 @@ Examples target Polars 1.44.2, 2.0.0, and 2.1.0; 2.1 additions are marked.
 
 ## Contents
 
-Context and registration; lazy execution; CTEs and recursive CTEs; temp
-tables and CREATE; ASOF joins; subqueries; table functions; scalar functions
-and time; types and casts; qualified names; gotchas.
+Context and registration; `pl.sql` caller scope; lazy execution; mixing SQL
+and expressions; CTEs and recursive CTEs; temp tables and CREATE; ASOF
+joins; subqueries; table functions; scalar functions and time; dialect
+notes; types and casts; qualified names; Polars 1.x; gotchas; reference map.
 
 ## Context and registration
 
-Use `SQLContext` for explicit, local table registration. `pl.sql` queries
-frames in the global namespace; `DataFrame.sql` / `LazyFrame.sql` query the
-frame as `self`.
+Use `SQLContext` for explicit, local table registration. `pl.sql` resolves
+frames from the caller's namespace (locals and globals); `DataFrame.sql` /
+`LazyFrame.sql` query the frame as `self`.
 
 ```python
 orders = pl.LazyFrame({
@@ -40,8 +41,22 @@ assert result.collect().to_dicts() == [
 
 `SQLContext(frames={...})`, keyword frames, and `register_globals=True` are
 alternatives. `register` / `register_many` add tables later; `unregister`
-removes them. A query sees only the context it is registered in, so prefer
-`SQLContext` inside functions and modules over `pl.sql`.
+removes them. A `SQLContext` sees only the tables registered in it; prefer it
+for reusable pipelines, catalog work, and cases where scope is unclear.
+`pl.sql` is convenient for a quick query over frames in the current scope.
+
+## pl.sql and caller scope
+
+`pl.sql` resolves frames visible in the calling scope, including locals.
+A different function or module does not share that namespace.
+
+```python
+def query_local():
+    local = pl.LazyFrame({"a": [1, 2]})
+    return pl.sql("SELECT * FROM local ORDER BY a").collect()
+
+assert query_local()["a"].to_list() == [1, 2]
+```
 
 ## Lazy execution
 
@@ -61,6 +76,21 @@ query, so row order is not guaranteed unless the query defines it. Add
 `ORDER BY` when order is part of the result. Parsing and name resolution are
 deferred to `collect()` / `collect_schema()` (2.0), so an unknown table or
 column can raise late.
+
+## Mixing SQL and expressions
+
+A SQL result is an ordinary `LazyFrame`; continue with expressions where
+that is clearer, and the chain still optimizes as one plan. `pl.sql_expr`
+embeds one SQL expression inside `select()` or `with_columns()`.
+
+```python
+df = pl.DataFrame({"price": [10, 20], "qty": [2, 3]})
+result = df.select(pl.sql_expr("price * qty AS total"))
+assert result["total"].to_list() == [20, 60]
+```
+
+`pl.sql_expr` accepts one string or a sequence and returns an `Expr` or a
+list of expressions. Prefer native expressions when they are equally clear.
 
 ## CTEs and recursive CTEs
 
@@ -223,6 +253,30 @@ result = ctx.execute(
 assert result.schema["ts"] == pl.Datetime("us", "UTC")
 ```
 
+## Dialect notes
+
+Polars SQL follows PostgreSQL loosely. Current 2.x differences:
+
+- Exact numeric literals without an exponent are `Decimal`; use
+  `1.1::DOUBLE` or `1.1e0` for `Float64`.
+- Integer `/` returns `Float64` (`5 / 2` -> `2.5`); `DIV(5, 2)` does integer
+  division. `%` and `DIV` truncate toward zero.
+- 2.1 adds `DATE_TRUNC`; on 2.0 use `DATE_PART` / `EXTRACT` or expressions.
+- `REGEXP_REPLACE` replaces the first match by default; pass `'g'` to replace
+  all matches.
+- Errors surface at `collect_schema()` / `collect()`, not at `execute()`
+  (2.0+).
+
+```python
+ctx = pl.SQLContext()
+result = ctx.execute(
+    "SELECT 5 / 2 AS ratio, DIV(5, 2) AS whole, 1.1 AS exact"
+).collect()
+assert result["ratio"].to_list() == [2.5]
+assert result["whole"].to_list() == [2]
+assert str(result.schema["exact"]).startswith("Decimal")
+```
+
 ## Types and casts
 
 2.1 adds `STRUCT<...>` and `MAP(...)` type names. Struct casts match fields
@@ -264,6 +318,19 @@ assert result["a"].to_list() == [1, 2]
 For an attached catalog `lake`, `lake.ns.t.a`, `ns.t.a`, and `t.a` all work
 as column qualifiers when the table is unambiguous.
 
+## On Polars 1.x
+
+This reference targets 2.x; check `pl.__version__`. On 1.44.2:
+
+- SQL numeric literals are `Float64` (`price * 1.1` is `Float64`), not
+  `Decimal`.
+- SQL errors raise when the query is built, not at `collect()`.
+- The 2.1 additions above are unavailable: recursive CTEs, temp tables,
+  `ASOF JOIN ... MATCH_CONDITION`, `generate_series` / `range`,
+  `DATE_TRUNC`, `CURRENT_*`, time-zone-aware literals, `STRUCT<...>` /
+  `MAP(...)` type names, and `read_ndjson` table functions.
+- `collect(engine="streaming")` is opt-in; 2.x lazy queries default to it.
+
 ## Gotchas
 
 - **One statement per `execute()`.** A string containing `CREATE ...; SELECT
@@ -277,7 +344,21 @@ as column qualifiers when the table is unambiguous.
   Python-side float behavior is required.
 - **ASOF clause order.** `MATCH_CONDITION (...)` comes before `ON ...`, and
   both inputs must be sorted on the match key.
-- **`pl.sql` uses the global namespace.** It cannot see local frames inside
-  a function; register them with `SQLContext` instead.
+- **`pl.sql` uses the caller's namespace.** It resolves locals and globals
+  in the calling scope; a frame from another function or module may not be
+  visible. Register explicitly with `SQLContext` when scope is unclear.
 - **Catalog identifiers are case-sensitive** and serialized plans can
   contain credentials. See `iceberg.md`.
+
+## Reference map
+
+Fetch from `https://docs.pola.rs/api/python/stable/reference/sql/`:
+
+| Need | Page |
+|---|---|
+| `SELECT`, `JOIN`, `GROUP BY`, `QUALIFY`, `ORDER BY`, `LIMIT` | `clauses.html` |
+| `UNION`, `EXCEPT`, `INTERSECT` | `set_operations.html` |
+| `CREATE TABLE`, `EXPLAIN`, `SHOW TABLES`, `UNNEST` | `table_operations.html` |
+| Aggregate, array, math, string, temporal, window functions | `functions/<category>.html` |
+| Operators | `operators/index.html` |
+| `pl.sql`, `SQLContext`, `pl.sql_expr` | `python_api.html` |

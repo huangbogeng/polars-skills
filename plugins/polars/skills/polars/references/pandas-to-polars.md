@@ -34,11 +34,20 @@ ambiguous translations, including missing values and boundary cases.
 | `(col >= a) & (col <= b)` | `col.is_between(a, b)` | for numeric ranges (closed) |
 | Monetary/financial aggregations | Preserve the source precision and rounding policy | Round only where requested; display formatting need not change computed values. |
 | `join_asof(..., tolerance=pl.duration(minutes=5))` | `join_asof(..., tolerance=timedelta(minutes=5))` | `tolerance` expects a Python `datetime.timedelta`, not a Polars duration expression |
-| `pl.col("age").cut([0, 17, 24, 34, 44, 54, 120], labels=[...6...])` | `pl.col("age").cut([17, 24, 34, 44, 54], labels=[...6...])` | Polars `cut` takes only interior boundaries; `n` breaks → `n+1` bins/labels. Outer bounds are implicit. pandas `bins=` includes both outer bounds. |
+| `pd.cut(df["age"], bins=[0, 17, 24, 34, 44, 54, 120], labels=[...6...])` | `pl.col("age").bin_intervals([17, 24, 34, 44, 54], labels=[...6...], right_closed=True)` | `bin_intervals` takes only interior breakpoints (`n` breaks → `n+1` bins/labels) and its outer bins are unbounded: pandas returns NaN outside `[0, 120]`, Polars puts those values in the first/last bin. Filter or use `when` if out-of-range must be null. `right_closed=True` matches pandas `(a, b]`. |
 | Translating a per-column loop: `for c in cols: df[c] = df[c] * 2` | `lf.with_columns(pl.col(cols) * 2)` | expression expansion — one expression covers the whole set; add `.name.suffix("_x")` to create new columns instead of replacing. Same for `df[cols].fillna(0)` → `pl.col(cols).fill_null(0)` |
 | `col.str.capitalize()` | `col.str.slice(0, 1).str.to_uppercase() + col.str.slice(1).str.to_lowercase()` | there is no `str.capitalize`. `str.to_titlecase()` is **not** a substitute — it upcases every word, so `"at_home"` becomes `"At_Home"`, not `"At_home"` |
 | `col.interpolate(limit=n)` | No direct `interpolate(limit=...)` equivalent | Preserve the gap limit, direction, and boundary behavior with equivalent expressions or a tested fallback. Dropping `limit` fills extra values; `forward_fill(limit=n)` changes the interpolation method. |
 | Column order drift after `with_columns`/`drop` | Finish with an explicit `.select(...)` in pandas order | see General approach, item 5 |
+
+```python
+ages = pl.Series([-1, 17, 18, 120, 121])
+bins = ["0-17", "18-24", "25-34", "35-44", "45-54", "55+"]
+binned = ages.bin_intervals(
+    [17, 24, 34, 44, 54], labels=bins, right_closed=True
+)
+assert binned.to_list() == ["0-17", "0-17", "18-24", "55+", "55+"]
+```
 
 ---
 

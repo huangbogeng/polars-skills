@@ -172,6 +172,10 @@ Each of these fails silently or with a confusing error.
 - **Null comparisons drop rows silently.** `filter(pl.col("v") > 2)`
   excludes nulls because `null > 2` is null, which is falsy. If nulls
   should be kept: `(pl.col("v") > 2) | pl.col("v").is_null()`.
+- **NaN is not null.** `is_null`, `fill_null`, and `null_count` ignore
+  `NaN`; use `is_nan` / `fill_nan`, and convert with `fill_nan(None)` before
+  aggregating when `NaN` should be treated as missing. `mean` and `sum`
+  propagate `NaN`.
 - **Polars 2.1 rejects mixed string/numeric arithmetic in eager code too.**
   `pl.Series([1, 2]) + "4"` used to return `["14", "24"]`; both engines now
   raise `InvalidOperationError`. Cast first:
