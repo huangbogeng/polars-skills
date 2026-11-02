@@ -4,9 +4,9 @@ Load this file when a task changes the *shape* of a frame — wide ↔ long,
 combining several frames, or expanding/collapsing list columns — rather
 than computing new values in place (that is `with_columns` / `select`).
 
-Examples target Polars 1.44.2 and 2.0.0. Older 1.x releases do not necessarily
-have `LazyFrame.pivot`, frame-level `gather`, or `horizontal_extend`; inspect
-the installed API before using them. For a missing lazy operation, collect
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0. Older 1.x releases do not
+necessarily have `LazyFrame.pivot`, frame-level `gather`, or
+`horizontal_extend`; inspect the installed API before using them. For a missing lazy operation, collect
 at that boundary and use an equivalent supported API.
 
 ## Contents
@@ -100,7 +100,7 @@ pl.concat([lf_a, lf_b], how="align")            # set-align shared columns
   `align_right` / `align_full` control the match.
 - **Use `how="horizontal_extend"` to pad shorter frames with nulls.**
   `how="horizontal"` was deprecated in 1.42.1 and requires equal heights
-  in 2.0. On Polars 2.0, `strict=False` no longer opts into padding and
+  in 2.0. On Polars 2.x, `strict=False` no longer opts into padding and
   raises; `strict` cannot be combined with `horizontal_extend`. On older
   versions without `horizontal_extend`, verify the behavior of `horizontal`
   rather than assuming the new name exists.
@@ -119,12 +119,12 @@ lf.explode("tags", "scores")    # several list columns, expanded in parallel
 lf.group_by("id").agg(pl.col("v").implode())   # values -> list per group
 ```
 
-A null list keeps its row (`keep_nulls=True`). On Polars 2.0,
+A null list keeps its row (`keep_nulls=True`). On Polars 2.x,
 `empty_as_null=False` is the default: an empty list produces **zero** rows.
 Pass `empty_as_null=True` to restore the 1.x behavior of one null row. Row
 counts change wherever a list column contains empty lists.
 
-`unpivot` does not guarantee output order on Polars 2.0 (streaming default);
+`unpivot` does not guarantee output order on Polars 2.x (streaming default);
 sort explicitly when order is part of the result. See `version-2.md`.
 
 ## gather() / gather_every()

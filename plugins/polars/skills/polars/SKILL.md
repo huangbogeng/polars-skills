@@ -7,15 +7,17 @@ description: >
   migrations from pandas to Polars; debugging or speeding up existing Polars
   code; and Python tabular analysis on CSV, Parquet, or DataFrames when no
   library has been chosen, even if the user never says "Polars". Covers
-  single-node CPU Polars, including streaming. Scope is single-node: Polars
-  Cloud, On-Prem, distributed, and GPU workloads are out of scope.
+  single-node CPU Polars, including streaming, Polars SQL, and Iceberg
+  tables. Scope is single-node: Polars Cloud, On-Prem, distributed, and GPU
+  workloads are out of scope.
 license: MIT
 metadata:
   author: Polars
   homepage: https://pola.rs
   tags: polars, dataframes, lazyframe, data-processing, data-analysis, python
-compatibility: Python 3.10+. Examples are tested with Polars 1.44.2 and
-  2.0.0; verify API availability and behavior on other versions.
+compatibility: Polars 2.1 requires Python 3.11+; Polars 1.44.2 and 2.0
+  require 3.10+. Examples are tested with 1.44.2, 2.0.0, and 2.1.0; verify
+  API availability and behavior on other versions.
 ---
 
 # Polars
@@ -75,32 +77,25 @@ print(lf.head(5).collect())          # eyeball values, formats, dirt
 
 ## Core rules
 
-- **Prefer native expressions.** Use expressions when they implement the
-  required semantics. Python UDFs can limit optimization and add overhead,
-  especially per-element calls. Use a tested UDF or batch operation when
-  necessary, with explicit output types and appropriate performance checks.
+- **Prefer native expressions.** Per-element Python UDFs serialize values
+  and limit optimization. Use `map_batches` with a compiled function only
+  when no expression exists; see `references/performance.md`.
 - **Filter early when semantics allow.** Moving a filter across a window,
-  aggregate, cumulative operation, or outer join can change results. Keep
-  the logical order and let the optimizer push safe predicates down.
-- **Group independent expressions.** Expressions in one `with_columns()`
-  cannot reference sibling aliases created in that call; use another context
-  for dependent calculations. Polars can combine independent contexts.
-  When the *same* operation applies to several columns, prefer expansion:
-  `pl.col("a", "b")`,
-  `pl.col(pl.Float64)`, `pl.col("^sales_.*$")`, `cs.numeric()`,
-  `pl.all().exclude("id")`. Rename the expanded set with `.name.suffix("_x")`
-  / `.name.prefix()` / `.name.map(fn)`; `.alias()` names one output only.
-  Selector catalogue and caveats: `references/expressions.md`.
+  aggregate, cumulative operation, or outer join can change results. Let the
+  optimizer push safe predicates.
+- **Group independent expressions.** Independent expressions in one
+  `with_columns()` run together; sibling aliases are not visible, so
+  dependent calculations need another context. Expand repeated operations
+  with `pl.col("a", "b")` or selectors instead of Python loops; details in
+  `contexts.md` and `expressions.md`.
 - **Avoid unnecessary materialization.** Collect at an intentional boundary
   or use a sink for large outputs. Repeated collects can repeat source work.
-- **Control types and precision.** Columns have one dtype, though operations
-  can coerce compatible types. Cast when required by the data contract.
-  `strict=False` turns invalid casts into nulls; inspect those losses.
-  Float downcasts and rounding can change results and need an explicit
-  precision policy.
+- **Control types and precision.** Cast explicitly and inspect
+  `strict=False` losses; float downcasts and rounding need a precision
+  policy. See `references/performance.md`.
 - **Investigate warnings.** Resolve performance and correctness warnings
-  where practical. If a warning is intentionally accepted, document why and
-  scope any suppression to that specific warning and operation.
+  where practical; scope any intentional suppression to one warning and
+  operation.
 
 ```python
 import polars.selectors as cs
@@ -170,6 +165,14 @@ Each of these fails silently or with a confusing error.
 - **Null comparisons drop rows silently.** `filter(pl.col("v") > 2)`
   excludes nulls because `null > 2` is null, which is falsy. If nulls
   should be kept: `(pl.col("v") > 2) | pl.col("v").is_null()`.
+- **NaN is not null.** `is_null`, `fill_null`, and `null_count` ignore
+  `NaN`; use `is_nan` / `fill_nan`, and convert with `fill_nan(None)` before
+  aggregating when `NaN` should be treated as missing. `mean` and `sum`
+  propagate `NaN`.
+- **Polars 2.1 rejects mixed string/numeric arithmetic in eager code too.**
+  `pl.Series([1, 2]) + "4"` used to return `["14", "24"]`; both engines now
+  raise `InvalidOperationError`. Cast first:
+  `pl.Series([1, 2]).cast(pl.String) + "4"`.
 - **Use `&`, `|`, `~` with parentheses around each condition.** Python's
   `and`/`or`/`not` raise on expressions, and without parentheses operator
   precedence binds the comparison wrong:
@@ -188,7 +191,7 @@ Each of these fails silently or with a confusing error.
   dtypes — use a selector instead.
 - **Nulls don't match in joins by default.** Rows with null keys silently
   drop out of inner joins; pass `nulls_equal=True` if they should match.
-- **On Polars 2.0, lazy row order is not guaranteed.** `collect()` defaults
+- **On Polars 2.x, lazy row order is not guaranteed.** `collect()` defaults
   to the streaming engine, which may reorder joins, `group_by`, and
   `unpivot`. Sort explicitly or use `maintain_order` when the consumer
   depends on order; see `references/version-2.md`.
@@ -198,12 +201,14 @@ Each of these fails silently or with a confusing error.
 
 ## Version and API verification
 
-Examples target Polars 1.44.2 and 2.0.0, not every 1.x release. Check
-`python -c "import polars as pl; print(pl.__version__)"` in the project's
-interpreter. Code written for 1.x must be re-checked on 2.0: the streaming
-engine is now the lazy default, several casts were removed, and some
-operations changed results silently. Read `references/version-2.md` when
-upgrading or when the project pins 2.x.
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0, not every 1.x release.
+Check `python -c "import polars as pl; print(pl.__version__)"` in the
+project's interpreter. Code written for 1.x must be re-checked on 2.x: the
+streaming engine is now the lazy default, several casts were removed, and
+some operations changed results silently. On 2.1, Python 3.11+ is required,
+eager mixed string/numeric arithmetic raises, and streaming `group_by` /
+`over` can spill to disk. Read `references/version-2.md` when upgrading or
+when the project pins 2.x.
 
 Verify uncertain APIs against the installed version:
 
@@ -230,8 +235,8 @@ Read the relevant sections when their detail is needed. Each file opens with
 a `## Contents` line; unrelated references need not be loaded.
 
 - **Upgrading from Polars 1.x or running 2.x** — read
-  `references/version-2.md` for streaming-order, cast, dtype, SQL, and
-  removed-API changes that alter results without raising.
+  `references/version-2.md` for streaming-order, cast, dtype, SQL, 2.1
+  changes, and removed-API changes that alter results without raising.
 - **Translating pandas → Polars** — read
   `references/pandas-to-polars.md` for
   API-difference traps absent from this file.
@@ -249,8 +254,21 @@ a `## Contents` line; unrelated references need not be loaded.
   `gather`.
 - `references/expressions.md` — string, temporal, list, struct, expansion
   and selector syntax; casting; null handling; conditionals; plus the
-  fetch-map described above.
-- `references/lazy-api.md` — scan options for dirty data, query plan
-  inspection with `explain()`, streaming engine for larger-than-memory
-  data, `sink_parquet`, and compute performance levers (dtypes,
-  categoricals, memory).
+  fetch-map described above. Array, Map, Categorical/Enum, and Binary are
+  in `types.md`.
+- `references/types.md` — `Array` vs `List`, `Map`, `Categorical` vs
+  `Enum`, `Categories`, and `Binary`.
+- `references/lazy-api.md` — scan options, schema discovery, query plan
+  inspection, execution, streaming, and sinks.
+- `references/io.md` — format matrix, scan/read and sink/write choices,
+  Parquet tuning and encryption, Delta, cloud, Excel, database, and Arrow.
+- `references/testing.md` — `polars.testing` asserts, schema/plan checks,
+  common exceptions, and batch processing.
+- `references/sql.md` — `SQLContext`, lazy SQL execution, CTEs including
+  2.1 recursive CTEs, temp tables, `ASOF JOIN ... MATCH_CONDITION`,
+  subqueries, table functions, SQL functions/types, and gotchas.
+- `references/iceberg.md` — 2.1 `scan_iceberg`, `sink_iceberg` /
+  `write_iceberg`, `delete_iceberg`, and SQL catalog attachment plus DDL.
+- `references/performance.md` — measure-first workflow, pushdown,
+  `with_columns` without copies, `collect_all` / lazy sinks, types, IO,
+  concurrency, and anti-patterns.

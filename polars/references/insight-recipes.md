@@ -147,7 +147,7 @@ Quantile bins on **Polars 1.44.2**:
 allows fewer bins and keeps interval labels; it does not promise four
 equally sized groups. Choose another tie policy if the task requires one.
 
-For new **Polars 2.0** code, use `bin_quantiles`; `qcut` is deprecated:
+For new **Polars 2.0+** code, use `bin_quantiles`; `qcut` is deprecated:
 
 ```python
 (

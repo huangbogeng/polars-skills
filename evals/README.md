@@ -103,7 +103,7 @@ was not measured.
 | `tag_counts` | empty vs null lists, `explode`, row counts |
 | `scale_numeric` | expression expansion and column order |
 
-All tasks run on Polars 1.44.2 and 2.0.0.
+All tasks run on Polars 1.44.2, 2.0.0, and 2.1.0 (2.1 requires Python 3.11+).
 
 ## Trigger evaluation
 

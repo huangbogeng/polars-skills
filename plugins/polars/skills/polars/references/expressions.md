@@ -1,4 +1,4 @@
-# String, Temporal, List, Struct Expressions
+# Expressions: Strings, Temporal, Nested, Selectors
 
 Load this file when a task involves text processing, date/time arithmetic,
 nested data, or multi-type column selection.
@@ -8,13 +8,14 @@ nested data, or multi-type column selection.
 Finding & verifying expressions in the API reference; `str.*` (includes
 parsing strings to dates/datetimes); `dt.*` (includes window grouping on
 timestamps); `list.*`; `struct.*`; expression expansion & selectors;
-casting; `when / then / otherwise`.
+casting; null and NaN handling; `when / then / otherwise`. `Array`, `Map`,
+`Categorical`/`Enum`, and `Binary` are in `types.md`.
 
 ## Finding & verifying expressions in the API reference
 
-Examples target Polars 1.44.2 and 2.0.0. Verify uncertain methods against
-the project's installed version using `help()`, `inspect.signature()`, or
-matching-version official documentation.
+Examples target Polars 1.44.2, 2.0.0, and 2.1.0. Verify uncertain methods
+against the project's installed version using `help()`,
+`inspect.signature()`, or matching-version official documentation.
 
 **Prefer the bundled lookup** for the installed version, with no MCP or
 network: `python scripts/polars_api.py doc Expr.str.contains` (also
@@ -38,7 +39,7 @@ namespace. The category map below routes to the appropriate section.
 | `is_between`, `is_in`, `is_duplicated`, `is_unique`, `any`, `all`, `not_` | `boolean` |
 | `cat.*` — categoricals | `categories` |
 | `alias`, `exclude`, column references | `columns` |
-| `abs`, `log`, `sqrt`, trig, `rank`, `rolling_*`, `cum_*`, `diff`, `pct_change`, `hist`, `rolling_mean_by`/`rolling_sum_by`/`rolling_*_by` (rolling on irregular timestamps), `ewm_mean_by`, `replace`, `replace_strict` | `computation` |
+| `abs`, `log`, `sqrt`, trig, `floordiv`, `truncdiv`, `rank`, `rolling_*`, `cum_*`, `diff`, `pct_change`, `hist`, `rolling_mean_by`/`rolling_sum_by`/`rolling_*_by` (rolling on irregular timestamps), `ewm_mean_by`, `replace`, `replace_strict` | `computation` |
 | `ext.*` — custom extension types | `extension` |
 | `pl.when`, `pl.lit`, `pl.col`, `pl.coalesce`, `pl.all_horizontal`, `pl.sum_horizontal`, `pl.concat_str`, `pl.int_range`, `pl.struct`, `pl.date_range`, `pl.datetime_range`, `pl.date_ranges`, `pl.datetime_ranges`, `pl.arg_sort_by`, `pl.business_day_count`, `pl.sql_expr` | `functions` |
 | `list.*` | `list` |
@@ -317,13 +318,45 @@ Caveats:
   Call `.as_expr()` first when you want the expression meaning instead —
   e.g. `(~cs.boolean().as_expr())` to negate boolean *values* rather than
   take the complement of the selected columns.
-- **Polars 2.0:** combining a selector with `pl.col(...)` via `&`, `|`, or
+- **Polars 2.0+:** combining a selector with `pl.col(...)` via `&`, `|`, or
   `^` no longer performs a column-set operation; it becomes an element-wise
   operator and can silently compute columns instead of selecting them. Use a
   selector on both sides, e.g.
   `cs.integer() & cs.by_name("id")`.
 - Expansion that matches nothing produces no columns rather than an error, so
   a typo'd pattern shows up as a missing (or empty) result, not an exception.
+
+---
+
+## NaN vs null
+
+`null` is missing data; `NaN` is a valid floating-point value. They are not
+interchangeable:
+
+- `null_count()` ignores `NaN`; `is_null()` is false for `NaN`.
+- `fill_null()` does not fill `NaN`; use `fill_nan(...)`.
+- `drop_nulls()` keeps `NaN`.
+- `mean` / `sum` skip nulls but propagate `NaN`; replace `NaN` with null
+  first when it should be ignored.
+
+```python
+values = pl.DataFrame({"v": [1.0, None, float("nan")]})
+stats = values.select(
+    pl.col("v").null_count().alias("nulls"),
+    pl.col("v").is_nan().sum().alias("nans"),
+    pl.col("v").mean().alias("mean_with_nan"),
+    pl.col("v").fill_nan(None).mean().alias("mean_without_nan"),
+)
+assert stats["nulls"].to_list() == [1]
+assert stats["nans"].to_list() == [1]
+assert stats["mean_with_nan"].is_nan().to_list() == [True]
+assert stats["mean_without_nan"].to_list() == [1.0]
+assert values.drop_nulls("v").height == 2
+```
+
+`fill_nan(value)` replaces `NaN` with a value; `fill_nan(None)` converts
+`NaN` to null. `is_nan()` computes the mask (Polars does not store NaN
+metadata, unlike its validity bitmap for nulls).
 
 ---
 
@@ -344,7 +377,7 @@ pl.col("date_int").cast(pl.Date)           # epoch days to Date
 lf.collect_schema()["col_name"]
 ```
 
-On Polars 2.0, casting a String column directly to `Date`, `Datetime`, or
+On Polars 2.x, casting a String column directly to `Date`, `Datetime`, or
 `Time` is removed. Parse with `str.to_date()` / `str.to_datetime()` /
 `str.to_time()`, then cast only the resulting temporal type if needed.
 Integer ↔ categorical casts were also removed; use `.cat.to(dtype)` and

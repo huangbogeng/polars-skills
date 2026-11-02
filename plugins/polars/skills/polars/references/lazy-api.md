@@ -9,10 +9,11 @@ with a single `collect()`.
 ## Contents
 
 Starting a lazy query; starting from an in-memory DataFrame; scan options
-that prevent downstream pain; schema discovery before execution;
-inspecting the plan; executing; larger-than-memory streaming and sinks
-(including the 2.0 streaming default and its ordering implications);
-compute performance levers (dtypes, categoricals, memory).
+that prevent downstream pain; schema discovery; inspecting the plan;
+executing; larger-than-memory streaming and sinks (including the 2.x
+streaming default, its ordering implications, and 2.1 out-of-core
+group-by/window spilling). Format and sink details are in `io.md`;
+performance tuning is in `performance.md`.
 
 ## Starting a lazy query
 
@@ -22,6 +23,8 @@ lf = pl.scan_parquet("data.parquet")      # also: scan_ndjson, scan_ipc
 lf = pl.scan_parquet("events/*.parquet")  # globs scan many files as one
 lf = df.lazy()                            # from an eager DataFrame
 ```
+
+For Delta, Iceberg, cloud, Excel, and database entries, see `io.md`.
 
 ## Starting from an in-memory DataFrame
 
@@ -121,7 +124,7 @@ The streaming engine can reduce peak memory by executing supported operations
 in chunks. Some operations still need substantial memory, and `collect()`
 materializes the final output.
 
-On **Polars 2.0**, `engine="auto"` (the default) resolves to the streaming
+On **Polars 2.x**, `engine="auto"` (the default) resolves to the streaming
 engine for lazy queries, so a plain `lf.collect()` is already streaming.
 Eager `DataFrame` operations still use the in-memory engine. The streaming
 engine does not guarantee row order for operations that do not require it —
@@ -138,8 +141,26 @@ To restore the 1.x default, pass `engine="in-memory"` per query, set
 `POLARS_ENGINE_AFFINITY=in-memory`. `explain()` still renders the optimized
 IR plan unless `engine="streaming"` is passed explicitly. On 1.x, passing
 `engine="streaming"` is opt-in and `maintain_order` on joins depends on the
-installed version; verify it. See `version-2.md` for the full set of 2.0
+installed version; verify it. See `version-2.md` for the full set of 2.x
 changes.
+
+On **Polars 2.1**, the streaming engine can spill `group_by` and `over`
+window state to disk. A high-cardinality aggregation that previously
+exhausted memory can finish under a budget without changing the query.
+Configure it with environment variables set before importing Polars:
+
+```python
+import os
+
+os.environ["POLARS_OOC_MEMORY_BUDGET_MB"] = "200"  # spill budget
+os.environ["POLARS_OOC_LOG_METRICS"] = "1"         # log spill/prefetch stats
+
+import polars as pl
+```
+
+`POLARS_OOMKILL_THRESHOLD_FRACTION` sets an out-of-memory kill threshold.
+Spilling trades speed for memory: leave the budget unset when the query
+fits, and use `engine="in-memory"` to opt out.
 
 For large outputs, sink straight to disk:
 
@@ -152,41 +173,5 @@ lf.sink_ndjson("out.ndjson")
 Use streaming or sinks when the input is much larger than memory, or when a
 regular `collect()` is killed by the OS.
 
-## Compute performance levers
-
-Measure these options on representative data and verify their effect on
-results and schema:
-
-- **Categorical / Enum for low-cardinality strings.** A column with few
-  distinct values (status, country, segment) stores each value once as an
-  integer code: `cast(pl.Categorical)` when the set comes from the data,
-  `cast(pl.Enum([...]))` when it is fixed and known. This can reduce memory
-  and speed up grouping or joining; it changes dtype and can affect sorting.
-  Enum values outside the declared set raise on a strict cast.
-- **Integer downcasts require range checks.** Use strict casts and verify
-  that the narrower dtype covers both current values and the intended input
-  range. Pin source types with `schema_overrides=` only when appropriate.
-- **Float downcasts are lossy.** `Float64 → Float32` reduces storage but
-  changes precision: `16777217.0` becomes `16777216.0`. Retain Float64 unless
-  the caller permits a measured error tolerance; do not downcast financial
-  or research values simply to reduce memory.
-- **Exact money with `Decimal`.** `str.to_decimal(scale=2)` (scale is
-  keyword-only) avoids binary floating-point representation error. Choose
-  precision, scale, overflow behavior, and rounding from the data contract;
-  reducing scale can lose fractional digits. Do not add `.round(2)` unless
-  the calculation or presentation explicitly calls for it.
-- **Prefer native dtypes for computation.** An `Object` column containing
-  arbitrary Python objects limits native expression support. Keep data in
-  supported native types when possible; isolate object-based fallbacks when
-  the required operation cannot be represented natively.
-
-Measure, don't guess:
-
-```python
-print(lf.explain())   # did the filter/projection push into the scan?
-df.estimated_size()   # in-memory bytes
-df.n_chunks()         # fragmentation; many chunks -> rechunk after concat
-```
-
-`.profile()` is deprecated as of 1.44 — it timed the old in-memory engine
-and misreports under streaming. Use `explain()` to inspect the plan.
+For format choices, encrypted Parquet, Delta, cloud, and databases, see
+`io.md`. For dtype, IO, and concurrency tuning, see `performance.md`.

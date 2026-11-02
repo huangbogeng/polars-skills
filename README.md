@@ -89,27 +89,33 @@ See [r-brink/polars-mcp](https://github.com/r-brink/polars-mcp) for setup.
 
 ## Validation
 
-Run the format validator with Python 3.11+ (the skill examples require 3.10+):
+Run the format validator with Python 3.11+ (examples require 3.10+ for
+Polars 1.x/2.0 and 3.11+ for Polars 2.1):
 
 ```bash
 uvx --from skills-ref==0.1.1 agentskills validate polars
 ```
 
-Run the examples on both tested Polars versions from the repository root:
+Run the examples on every tested Polars version from the repository root:
 
 ```bash
 uv run --no-project --python 3.10 --with polars==1.44.2 python -W error::DeprecationWarning -m unittest discover -s tests -v
 uv run --no-project --python 3.10 --with polars==2.0.0 python -W error::DeprecationWarning -m unittest discover -s tests -v
+uv run --no-project --python 3.11 --with polars==2.1.0 python -W error::DeprecationWarning -m unittest discover -s tests -v
 ```
 
 Tests execute selected documentation code blocks and check their results on
 fixtures covering ties, calendar gaps, zero denominators, nulls, JSON schemas,
-joins, pivots, and Polars 2.0 breaking changes. Every fenced Python block is
+joins, pivots, and Polars 2.x breaking changes. Every fenced Python block is
 also parsed, so examples cannot drift into invalid syntax. Polars 2.0-only
 examples (for example `bin_quantiles` and streaming-order behavior) are
-skipped on 1.x and run on 2.0. The suite also exercises the bundled live API
-lookup. CI runs these checks on pushes and pull requests and before the
-release job.
+skipped on 1.x and run on 2.0+; 2.1 examples (eager string/numeric
+arithmetic, `truncdiv`, full `join_where`, SQL additions, `pl.sql` scope,
+Delta/Iceberg notes, performance APIs, nested types, IO, and testing) run
+on 2.1+. The suite also exercises NaN/null semantics, `bin_intervals`,
+no-copy `with_columns`, lazy sinks, `collect_all`, and the bundled live API
+lookup. CI runs these checks on pushes and
+pull requests and before the release job.
 
 ## Evaluation
 
