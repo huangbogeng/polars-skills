@@ -1,4 +1,4 @@
-# String, Temporal, List, Struct Expressions
+# Expressions: Strings, Temporal, Nested, Selectors
 
 Load this file when a task involves text processing, date/time arithmetic,
 nested data, or multi-type column selection.
@@ -8,7 +8,8 @@ nested data, or multi-type column selection.
 Finding & verifying expressions in the API reference; `str.*` (includes
 parsing strings to dates/datetimes); `dt.*` (includes window grouping on
 timestamps); `list.*`; `struct.*`; expression expansion & selectors;
-casting; null and NaN handling; `when / then / otherwise`.
+casting; null and NaN handling; `when / then / otherwise`. `Array`, `Map`,
+`Categorical`/`Enum`, and `Binary` are in `types.md`.
 
 ## Finding & verifying expressions in the API reference
 

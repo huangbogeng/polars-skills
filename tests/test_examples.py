@@ -366,6 +366,40 @@ class ExpressionExamples(unittest.TestCase):
         run_example("expressions.md", "## NaN vs null")
 
 
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 type APIs")
+class TypesExamples(unittest.TestCase):
+    def test_array(self):
+        run_example("types.md", "## `Array` vs `List`")
+
+    def test_map(self):
+        run_example("types.md", "## `Map`")
+
+    def test_categorical_and_enum(self):
+        run_example("types.md", "## `Categorical` vs `Enum`")
+
+    def test_categories_and_binary(self):
+        run_example("types.md", "## `Categories`")
+        run_example("types.md", "## `Binary`")
+
+
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 IO APIs")
+class IOExamples(unittest.TestCase):
+    def test_encrypted_parquet(self):
+        run_example("io.md", "## Encrypted Parquet")
+
+
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 testing APIs")
+class TestingExamples(unittest.TestCase):
+    def test_asserts(self):
+        run_example("testing.md", "## `polars.testing` asserts")
+
+    def test_schema_and_plan(self):
+        run_example("testing.md", "## Schema and plan checks")
+
+    def test_collect_batches(self):
+        run_example("testing.md", "## Batch processing")
+
+
 @unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 performance APIs")
 class PerformanceExamples(unittest.TestCase):
     def test_with_columns_does_not_mutate_or_copy(self):

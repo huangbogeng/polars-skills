@@ -254,12 +254,16 @@ a `## Contents` line; unrelated references need not be loaded.
   `gather`.
 - `references/expressions.md` — string, temporal, list, struct, expansion
   and selector syntax; casting; null handling; conditionals; plus the
-  fetch-map described above.
-- `references/lazy-api.md` — scan options for dirty data, query plan
-  inspection with `explain()`, streaming engine for larger-than-memory
-  data (including 2.1 out-of-core `group_by` / `over`), encrypted Parquet,
-  `sink_parquet`, and compute performance levers (dtypes, categoricals,
-  memory).
+  fetch-map described above. Array, Map, Categorical/Enum, and Binary are
+  in `types.md`.
+- `references/types.md` — `Array` vs `List`, `Map`, `Categorical` vs
+  `Enum`, `Categories`, and `Binary`.
+- `references/lazy-api.md` — scan options, schema discovery, query plan
+  inspection, execution, streaming, and sinks.
+- `references/io.md` — format matrix, scan/read and sink/write choices,
+  Parquet tuning and encryption, Delta, cloud, Excel, database, and Arrow.
+- `references/testing.md` — `polars.testing` asserts, schema/plan checks,
+  batch processing, and property-based tests.
 - `references/sql.md` — `SQLContext`, lazy SQL execution, CTEs including
   2.1 recursive CTEs, temp tables, `ASOF JOIN ... MATCH_CONDITION`,
   subqueries, table functions, SQL functions/types, and gotchas.

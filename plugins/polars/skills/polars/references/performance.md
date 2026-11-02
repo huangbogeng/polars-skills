@@ -7,8 +7,8 @@ version-specific notes are marked.
 ## Contents
 
 Measure first; keep work in the engine; column operations without copies;
-move less data; plan once; memory and types; IO; concurrency; anti-patterns;
-references.
+move less data; plan once; memory and types; IO; concurrency; configuration;
+anti-patterns; references.
 
 ## Measure first
 
@@ -214,25 +214,14 @@ assert vectors.dtype == pl.Array(pl.Int64, 2)
 
 ## IO
 
-- Store repeated scans as Parquet; it is columnar and carries statistics.
-- `sink_parquet` / `write_parquet` accept `compression`, `compression_level`,
-  `row_group_size`, and `statistics`. Defaults are reasonable; tune only
-  with a benchmark.
-- Partition on columns used by later filters (`partition_by=` or
-  `pl.PartitionBy`) so scans can skip files.
-- Cloud scans still get predicate/projection pushdown; keep filters and
-  selections before `collect()`.
-- Delta and Iceberg scans (`scan_delta`, `scan_iceberg`) are lazy and can
-  use metadata statistics; see `lazy-api.md` and `iceberg.md`.
+Format matrix and entry points: `io.md`.
 
-```python
-lf.sink_parquet(
-    "out.parquet",
-    compression="zstd",
-    row_group_size=250_000,
-    statistics=True,
-)
-```
+- Store repeated scans as Parquet; it is columnar and carries statistics.
+- Partition on columns used by later filters so scans can skip files.
+- Keep filters and projections before `collect()` for cloud and lakehouse
+  scans.
+- Tune compression, row groups, and statistics only with a benchmark;
+  details in `io.md`.
 
 ## Concurrency
 
@@ -249,6 +238,21 @@ lf.sink_parquet(
 - `pl.thread_pool_size()` reports the current pool size.
 - `POLARS_OOC_*` and `POLARS_ENGINE_AFFINITY` are covered in
   `lazy-api.md`.
+
+## Configuration
+
+| Setting | Scope | Notes |
+|---|---|---|
+| `POLARS_MAX_THREADS` | process, before import | Override the thread pool only in special contexts (for example a PySpark UDF); otherwise let the engine choose. |
+| `POLARS_ENGINE_AFFINITY` | process | `"in-memory"` restores the pre-2.0 lazy default; `"streaming"` forces streaming. |
+| `POLARS_OOC_MEMORY_BUDGET_MB` | process, before import | 2.1 out-of-core spill budget. |
+| `POLARS_OOC_LOG_METRICS` | process, before import | Log spill/prefetch statistics. |
+| `POLARS_OOMKILL_THRESHOLD_FRACTION` | process, before import | Out-of-memory kill threshold. |
+| `pl.Config.set_streaming_chunk_size` | process | Tune the streaming batch size; measure memory and throughput. |
+| `POLARS_HYPOTHESIS_PROFILE` | test process | Parametric test profile (`fast`, `balanced`, `expensive`). |
+
+Use environment variables only when a benchmark shows they help; most
+queries need none of them.
 
 ## Anti-patterns
 

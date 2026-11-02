@@ -8,12 +8,12 @@ with a single `collect()`.
 
 ## Contents
 
-Starting a lazy query (including Delta Lake); starting from an in-memory
-DataFrame; scan options that prevent downstream pain; schema discovery;
-inspecting the plan; executing; larger-than-memory streaming and sinks
-(including the 2.x streaming default, its ordering implications, and 2.1
-out-of-core group-by/window spilling); encrypted Parquet; performance
-tuning lives in `performance.md`.
+Starting a lazy query; starting from an in-memory DataFrame; scan options
+that prevent downstream pain; schema discovery; inspecting the plan;
+executing; larger-than-memory streaming and sinks (including the 2.x
+streaming default, its ordering implications, and 2.1 out-of-core
+group-by/window spilling). Format and sink details are in `io.md`;
+performance tuning is in `performance.md`.
 
 ## Starting a lazy query
 
@@ -21,13 +21,10 @@ tuning lives in `performance.md`.
 lf = pl.scan_csv("data.csv")
 lf = pl.scan_parquet("data.parquet")      # also: scan_ndjson, scan_ipc
 lf = pl.scan_parquet("events/*.parquet")  # globs scan many files as one
-lf = pl.scan_delta("lake/orders")         # Delta Lake (polars[deltalake])
 lf = df.lazy()                            # from an eager DataFrame
 ```
 
-`scan_delta` is the lazy Delta entry point; `read_delta` materializes.
-`version=` selects a snapshot for time travel. Delta support requires the
-`deltalake` extra. Use `scan_iceberg` for Iceberg tables; see `iceberg.md`.
+For Delta, Iceberg, cloud, Excel, and database entries, see `io.md`.
 
 ## Starting from an in-memory DataFrame
 
@@ -176,27 +173,5 @@ lf.sink_ndjson("out.ndjson")
 Use streaming or sinks when the input is much larger than memory, or when a
 regular `collect()` is killed by the OS.
 
-## Encrypted Parquet
-
-2.1 reads and writes Parquet modular encryption. Pass property objects to
-`read_parquet(decryption=...)` / `write_parquet(encryption=...)`; keys are
-bytes, and `column_keys` maps column names to per-column keys.
-
-```python
-key = b"0123456789012345"
-encryption = pl.ParquetEncryptionProperties(footer_key=key)
-df.write_parquet("secure.parquet", encryption=encryption)
-
-result = pl.read_parquet(
-    "secure.parquet",
-    decryption=pl.ParquetDecryptionProperties(footer_key=key),
-)
-```
-
-With any `column_keys`, only the named columns are encrypted and the others
-are written unencrypted. `plaintext_footer=True` lets readers without the
-footer key see the schema and unencrypted columns; the footer is still
-signed. Encryption is unstable in 2.1; keep keys out of source control and
-out of serialized query plans.
-
-For dtype, IO, and concurrency tuning, see `performance.md`.
+For format choices, encrypted Parquet, Delta, cloud, and databases, see
+`io.md`. For dtype, IO, and concurrency tuning, see `performance.md`.

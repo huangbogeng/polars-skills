@@ -26,6 +26,8 @@ has been chosen. It teaches agents to:
   and 2.1 Iceberg scans, sinks, deletes, and SQL catalogs
 - Tune performance with plan inspection, no-copy `with_columns`, lazy sinks,
   type choices, and concurrency guidance
+- Cover `Array`/`Map`/`Categorical`/`Enum`/`Binary`, the IO format matrix,
+  and `polars.testing` helpers
 
 ## Installation
 
@@ -153,11 +155,14 @@ polars/
     ├── insight-recipes.md      # natural-language question to query recipes
     ├── joins.md                # equi/asof/where/cross joins, validate, fan-out
     ├── iceberg.md              # scan/sink/delete Iceberg tables and SQL catalogs (2.1)
-    ├── lazy-api.md             # scan options, query plan inspection, streaming, encryption
+    ├── io.md                   # format matrix, Parquet, Delta, cloud, Excel, databases
+    ├── lazy-api.md             # scan options, query plan inspection, streaming, sinks
     ├── pandas-to-polars.md     # API pattern differences and correctness traps
     ├── performance.md          # measure-first tuning, copies, types, IO, concurrency
     ├── reshaping.md            # pivot, unpivot, transpose, concat, explode, gather
     ├── sql.md                  # SQLContext, CTEs, temp tables, ASOF joins, table functions
+    ├── testing.md              # polars.testing, schema/plan checks, batches, hypothesis
+    ├── types.md                # Array/List, Map, Categorical/Enum, Categories, Binary
     └── version-2.md            # Polars 2.x streaming, cast, dtype, SQL, and 2.1 changes
 ```
 
