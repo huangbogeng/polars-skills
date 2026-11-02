@@ -111,8 +111,9 @@ also parsed, so examples cannot drift into invalid syntax. Polars 2.0-only
 examples (for example `bin_quantiles` and streaming-order behavior) are
 skipped on 1.x and run on 2.0+; 2.1 examples (eager string/numeric
 arithmetic, `truncdiv`, full `join_where`, SQL additions, `pl.sql` scope,
-Delta/Iceberg notes) run on 2.1+. The suite also exercises NaN/null
-semantics, `bin_intervals`, and the bundled live API lookup. CI runs these checks on pushes and
+Delta/Iceberg notes, and performance APIs) run on 2.1+. The suite also
+exercises NaN/null semantics, `bin_intervals`, no-copy `with_columns`,
+lazy sinks, `collect_all`, and the bundled live API lookup. CI runs these checks on pushes and
 pull requests and before the release job.
 
 ## Evaluation

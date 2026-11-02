@@ -272,3 +272,6 @@ a `## Contents` line; unrelated references need not be loaded.
   subqueries, table functions, SQL functions/types, and gotchas.
 - `references/iceberg.md` — 2.1 `scan_iceberg`, `sink_iceberg` /
   `write_iceberg`, `delete_iceberg`, and SQL catalog attachment plus DDL.
+- `references/performance.md` — measure-first workflow, pushdown,
+  `with_columns` without copies, `collect_all` / lazy sinks, types, IO,
+  concurrency, and anti-patterns.

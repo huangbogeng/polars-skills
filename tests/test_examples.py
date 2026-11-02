@@ -366,6 +366,26 @@ class ExpressionExamples(unittest.TestCase):
         run_example("expressions.md", "## NaN vs null")
 
 
+@unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 performance APIs")
+class PerformanceExamples(unittest.TestCase):
+    def test_with_columns_does_not_mutate_or_copy(self):
+        run_example("performance.md", "## Column operations without copies")
+
+    def test_collect_all_shares_subplans(self):
+        run_example("performance.md", "## Plan once", block=0)
+
+    def test_lazy_sinks_and_partitioning(self):
+        run_example("performance.md", "## Plan once", block=1)
+        run_example("performance.md", "## Plan once", block=2)
+
+    def test_enum_and_array(self):
+        run_example("performance.md", "## Memory and types")
+
+    @unittest.skipUnless(np is not None, "NumPy is required")
+    def test_numpy_ufunc_and_map_batches(self):
+        run_example("performance.md", "## Keep work in the engine", block=1)
+
+
 @unittest.skipUnless(VERSION >= (2, 1), "Polars 2.1 behavior")
 class Version21Examples(unittest.TestCase):
     def test_eager_mixed_string_numeric_arithmetic_raises(self):

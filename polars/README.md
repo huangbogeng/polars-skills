@@ -24,6 +24,8 @@ has been chosen. It teaches agents to:
   arithmetic and out-of-core group-bys
 - Use Polars SQL (including 2.1 recursive CTEs, temp tables, and ASOF joins)
   and 2.1 Iceberg scans, sinks, deletes, and SQL catalogs
+- Tune performance with plan inspection, no-copy `with_columns`, lazy sinks,
+  type choices, and concurrency guidance
 
 ## Installation
 
@@ -153,6 +155,7 @@ polars/
     ├── iceberg.md              # scan/sink/delete Iceberg tables and SQL catalogs (2.1)
     ├── lazy-api.md             # scan options, query plan inspection, streaming, encryption
     ├── pandas-to-polars.md     # API pattern differences and correctness traps
+    ├── performance.md          # measure-first tuning, copies, types, IO, concurrency
     ├── reshaping.md            # pivot, unpivot, transpose, concat, explode, gather
     ├── sql.md                  # SQLContext, CTEs, temp tables, ASOF joins, table functions
     └── version-2.md            # Polars 2.x streaming, cast, dtype, SQL, and 2.1 changes
