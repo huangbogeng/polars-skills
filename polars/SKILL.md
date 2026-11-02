@@ -77,32 +77,25 @@ print(lf.head(5).collect())          # eyeball values, formats, dirt
 
 ## Core rules
 
-- **Prefer native expressions.** Use expressions when they implement the
-  required semantics. Python UDFs can limit optimization and add overhead,
-  especially per-element calls. Use a tested UDF or batch operation when
-  necessary, with explicit output types and appropriate performance checks.
+- **Prefer native expressions.** Per-element Python UDFs serialize values
+  and limit optimization. Use `map_batches` with a compiled function only
+  when no expression exists; see `references/performance.md`.
 - **Filter early when semantics allow.** Moving a filter across a window,
-  aggregate, cumulative operation, or outer join can change results. Keep
-  the logical order and let the optimizer push safe predicates down.
-- **Group independent expressions.** Expressions in one `with_columns()`
-  cannot reference sibling aliases created in that call; use another context
-  for dependent calculations. Polars can combine independent contexts.
-  When the *same* operation applies to several columns, prefer expansion:
-  `pl.col("a", "b")`,
-  `pl.col(pl.Float64)`, `pl.col("^sales_.*$")`, `cs.numeric()`,
-  `pl.all().exclude("id")`. Rename the expanded set with `.name.suffix("_x")`
-  / `.name.prefix()` / `.name.map(fn)`; `.alias()` names one output only.
-  Selector catalogue and caveats: `references/expressions.md`.
+  aggregate, cumulative operation, or outer join can change results. Let the
+  optimizer push safe predicates.
+- **Group independent expressions.** Independent expressions in one
+  `with_columns()` run together; sibling aliases are not visible, so
+  dependent calculations need another context. Expand repeated operations
+  with `pl.col("a", "b")` or selectors instead of Python loops; details in
+  `contexts.md` and `expressions.md`.
 - **Avoid unnecessary materialization.** Collect at an intentional boundary
   or use a sink for large outputs. Repeated collects can repeat source work.
-- **Control types and precision.** Columns have one dtype, though operations
-  can coerce compatible types. Cast when required by the data contract.
-  `strict=False` turns invalid casts into nulls; inspect those losses.
-  Float downcasts and rounding can change results and need an explicit
-  precision policy.
+- **Control types and precision.** Cast explicitly and inspect
+  `strict=False` losses; float downcasts and rounding need a precision
+  policy. See `references/performance.md`.
 - **Investigate warnings.** Resolve performance and correctness warnings
-  where practical. If a warning is intentionally accepted, document why and
-  scope any suppression to that specific warning and operation.
+  where practical; scope any intentional suppression to one warning and
+  operation.
 
 ```python
 import polars.selectors as cs

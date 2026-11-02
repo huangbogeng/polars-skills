@@ -180,8 +180,10 @@ after measuring a repeated expensive subplan.
   the value range. `Int8`/`UInt8` for 0..255, `Int16`/`UInt16` for the next
   range, and so on; use a strict cast and validate boundaries.
 - **Prefer `Enum` over `Categorical`** when categories are known up front:
-  the encoding is fixed, ordered, and avoids global-mapping lookups and
-  locks. Use `Categorical` only when categories grow dynamically.
+  low-cardinality strings encode as integers; the mapping is fixed, ordered,
+  and avoids global-mapping locks. Unknown values raise on a strict cast.
+  Use `Categorical` only when categories grow dynamically; it changes dtype
+  and can affect sorting.
 - **`Categories`** can choose a smaller physical type (`UInt8`/`UInt16`/
   `UInt32`) when the category count is low. `StringCache` is deprecated and
   does nothing in current Polars.
@@ -189,8 +191,11 @@ after measuring a repeated expensive subplan.
   efficient and faster. Use `List` only when lengths vary or you need
   list-only operations.
 - **Decimal vs integer minor units**: `Decimal` avoids binary float error but
-  is heavier than integer cents. Choose from the precision contract and
+  is heavier than integer cents. `str.to_decimal(scale=2)` is keyword-only;
+  reducing scale loses digits. Choose from the precision contract and
   measure; do not add `.round(2)` just to make money look tidy.
+- **Object dtype** holds arbitrary Python objects and limits native
+  expressions. Keep native dtypes and isolate object-based fallbacks.
 - **Float32** is lossy; retain `Float64` unless a measured tolerance allows
   otherwise.
 - **`rechunk()`** copies; do it only after many small chunks (for example
@@ -242,31 +247,21 @@ lf.sink_parquet(
   before importing Polars. The docs recommend leaving it to the engine
   except in special contexts such as a PySpark UDF.
 - `pl.thread_pool_size()` reports the current pool size.
-- `POLARS_OOC_MEMORY_BUDGET_MB` and `POLARS_OOC_LOG_METRICS` control 2.1
-  out-of-core spilling; `POLARS_ENGINE_AFFINITY="in-memory"` opts out of the
-  streaming default. See `lazy-api.md`.
+- `POLARS_OOC_*` and `POLARS_ENGINE_AFFINITY` are covered in
+  `lazy-api.md`.
 
 ## Anti-patterns
 
-- Repeated `.collect()` between steps; use one plan and `collect_all` for
-  branches.
-- `map_elements` for conditional logic or lookups that `when`/`then` or
-  `replace_strict` can express.
-- `df["new"] = ...` or copying a DataFrame to mutate columns; use
-  `with_columns`.
-- A Python loop of `df = df.with_columns(...)`; use one call or expansion.
-- `collect(streaming=True)` (removed in 2.0) or `pivot(columns=...)`
-  (removed in 2.0).
-- `LazyFrame.profile()` (removed in 2.0) or manual `.cache()` without a
-  measured repeated subplan.
-- `StringCache` / `enable_string_cache()`; use `Enum` or `Categories`.
-- “Use Dask/Vaex for larger-than-RAM” — Polars has streaming and 2.1
-  out-of-core group-by/window spilling.
-- Sorting before an equi join; sorting is required for `join_asof`, and can
-  enable fast paths elsewhere, but it is not free.
-- Downcasting integers without a range check; using `Categorical` when
-  `Enum` is possible; using `List` when `Array` is possible.
-- Calling `to_numpy()` and back without a measured reason.
+- Repeated `.collect()`; use one plan and `collect_all` for branches.
+- `map_elements` for logic that an expression can express.
+- `df["new"] = ...` or clone-to-mutate; use `with_columns`.
+- Per-column `with_columns` loops; use expansion.
+- Removed APIs: `collect(streaming=True)`, `pivot(columns=...)`,
+  `profile()`, `StringCache`.
+- Dask/Vaex for larger-than-RAM; use streaming and out-of-core spilling.
+- Sorting before equi joins; downcasting without a range check;
+  `Categorical` when `Enum` works; `List` when `Array` works; `to_numpy()`
+  round trips without a measured reason.
 
 ## References
 

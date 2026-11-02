@@ -104,21 +104,16 @@ df.select(pl.all().name.prefix("raw_"))
 
 ## Polars 2.0 removals for pandas-shaped code
 
-If the project runs Polars 2.x, also check `version-2.md`. The removals most
-likely to appear in translated pandas code:
+If the project runs Polars 2.x, the full list is in `version-2.md`. The
+removals most likely to appear in translated pandas code:
 
-- `melt()` → `unpivot()` (`index=` / `on=`).
-- `with_row_count()` → `with_row_index()` (default column `"index"`).
-- String-to-temporal casts: `col.cast(pl.Date)` → `col.str.to_date()`;
-  likewise `str.to_datetime()` and `str.to_time()`.
-- `group_by(...).count()` → `group_by(...).len()`.
-- `join_nulls=` → `nulls_equal=`; `how="outer"` → `how="full"`.
-- `qcut()` / `cut()` are deprecated → `bin_quantiles()` / `bin_intervals()`.
-- Lazy collection defaults to streaming and may reorder rows; sort or use
-  `maintain_order` when the pandas result's order is part of the contract.
-- On Polars 2.1, mixed string/numeric arithmetic raises in eager code too
-  (`df["id"] + "_x"` no longer stringifies implicitly); cast the numeric side
-  with `.cast(pl.String)` first.
+- `melt()` → `unpivot()`; `with_row_count()` → `with_row_index()`.
+- String-to-temporal `cast()` → `str.to_date()` / `to_datetime()` /
+  `to_time()`; `group_by().count()` → `.len()`.
+- `join_nulls=` → `nulls_equal=`; `how="outer"` → `"full"`.
+- `cut` / `qcut` → `bin_intervals` / `bin_quantiles`.
+- 2.x streaming may reorder rows; sort or use `maintain_order`.
+- 2.1 mixed string/numeric arithmetic raises in eager code too; cast first.
 
 ## Polars-specific correctness traps
 
