@@ -263,7 +263,7 @@ a `## Contents` line; unrelated references need not be loaded.
 - `references/io.md` — format matrix, scan/read and sink/write choices,
   Parquet tuning and encryption, Delta, cloud, Excel, database, and Arrow.
 - `references/testing.md` — `polars.testing` asserts, schema/plan checks,
-  batch processing, and property-based tests.
+  common exceptions, and batch processing.
 - `references/sql.md` — `SQLContext`, lazy SQL execution, CTEs including
   2.1 recursive CTEs, temp tables, `ASOF JOIN ... MATCH_CONDITION`,
   subqueries, table functions, SQL functions/types, and gotchas.

@@ -179,38 +179,16 @@ after measuring a repeated expensive subplan.
 - **Integer downcasts** reduce memory and bandwidth, but only after proving
   the value range. `Int8`/`UInt8` for 0..255, `Int16`/`UInt16` for the next
   range, and so on; use a strict cast and validate boundaries.
-- **Prefer `Enum` over `Categorical`** when categories are known up front:
-  low-cardinality strings encode as integers; the mapping is fixed, ordered,
-  and avoids global-mapping locks. Unknown values raise on a strict cast.
-  Use `Categorical` only when categories grow dynamically; it changes dtype
-  and can affect sorting.
-- **`Categories`** can choose a smaller physical type (`UInt8`/`UInt16`/
-  `UInt32`) when the category count is low. `StringCache` is deprecated and
-  does nothing in current Polars.
-- **Prefer `Array` over `List`** for fixed-shape values; it is more memory
-  efficient and faster. Use `List` only when lengths vary or you need
-  list-only operations.
+- **Choose compact types**: prefer `Enum` over `Categorical` for fixed
+  categories and `Array` over `List` for fixed shape; see `types.md`.
 - **Decimal vs integer minor units**: `Decimal` avoids binary float error but
   is heavier than integer cents. `str.to_decimal(scale=2)` is keyword-only;
   reducing scale loses digits. Choose from the precision contract and
   measure; do not add `.round(2)` just to make money look tidy.
-- **Object dtype** holds arbitrary Python objects and limits native
-  expressions. Keep native dtypes and isolate object-based fallbacks.
 - **Float32** is lossy; retain `Float64` unless a measured tolerance allows
   otherwise.
 - **`rechunk()`** copies; do it only after many small chunks (for example
   after concatenating many frames) when row-wise work follows.
-
-```python
-colors = pl.Series(
-    ["red", "blue", "red"], dtype=pl.Enum(["red", "blue"])
-)
-vectors = pl.Series(
-    [[1, 2], [3, 4]], dtype=pl.Array(pl.Int64, 2)
-)
-assert colors.dtype == pl.Enum(["red", "blue"])
-assert vectors.dtype == pl.Array(pl.Int64, 2)
-```
 
 ## IO
 
@@ -249,7 +227,6 @@ Format matrix and entry points: `io.md`.
 | `POLARS_OOC_LOG_METRICS` | process, before import | Log spill/prefetch statistics. |
 | `POLARS_OOMKILL_THRESHOLD_FRACTION` | process, before import | Out-of-memory kill threshold. |
 | `pl.Config.set_streaming_chunk_size` | process | Tune the streaming batch size; measure memory and throughput. |
-| `POLARS_HYPOTHESIS_PROFILE` | test process | Parametric test profile (`fast`, `balanced`, `expensive`). |
 
 Use environment variables only when a benchmark shows they help; most
 queries need none of them.

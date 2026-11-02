@@ -161,7 +161,7 @@ polars/
     ├── performance.md          # measure-first tuning, copies, types, IO, concurrency
     ├── reshaping.md            # pivot, unpivot, transpose, concat, explode, gather
     ├── sql.md                  # SQLContext, CTEs, temp tables, ASOF joins, table functions
-    ├── testing.md              # polars.testing, schema/plan checks, batches, hypothesis
+    ├── testing.md              # polars.testing, schema/plan checks, exceptions, batches
     ├── types.md                # Array/List, Map, Categorical/Enum, Categories, Binary
     └── version-2.md            # Polars 2.x streaming, cast, dtype, SQL, and 2.1 changes
 ```

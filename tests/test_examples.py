@@ -412,9 +412,6 @@ class PerformanceExamples(unittest.TestCase):
         run_example("performance.md", "## Plan once", block=1)
         run_example("performance.md", "## Plan once", block=2)
 
-    def test_enum_and_array(self):
-        run_example("performance.md", "## Memory and types")
-
     @unittest.skipUnless(np is not None, "NumPy is required")
     def test_numpy_ufunc_and_map_batches(self):
         run_example("performance.md", "## Keep work in the engine", block=1)

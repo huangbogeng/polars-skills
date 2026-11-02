@@ -6,7 +6,7 @@ before answering.
 ## Contents
 
 What to assert; `polars.testing` asserts; tolerances and ordering; schema and
-plan checks; batch processing; property-based tests; references.
+plan checks; common exceptions; batch processing; references.
 
 ## What to assert
 
@@ -63,6 +63,21 @@ assert "SELECTION" in plan or "FILTER" in plan
 Plan text is version-dependent; assert on stable fragments such as
 `SELECTION` or `PROJECT`, not the full plan.
 
+## Common exceptions
+
+| Error | Typical cause | Fix |
+|---|---|---|
+| `ColumnNotFoundError` | typo, missing regex anchors, wrong frame | `collect_schema()`, `pl.col("^prefix_.*$")` |
+| `ShapeError` | unequal heights in `concat(how="horizontal")`, length mismatch | align or `horizontal_extend`; check literals |
+| `InvalidOperationError` | invalid cast, mixed string/numeric arithmetic | explicit `cast`; `str.to_date()` |
+| `SchemaError` | incompatible schema or cast target | pin `schema_overrides`; align dtypes |
+| `DuplicateError` | duplicate output names | `.alias()` / `.name.suffix()` |
+| `ComputeError` | pivot cell ambiguity, bad expression, missing key | `aggregate_function=`, inspect input |
+| `SQLInterfaceError` | SQL parse/resolution failure | `collect_schema()`, one statement per `execute` |
+
+Exception text usually names the column or expression; read it before
+changing the query.
+
 ## Batch processing
 
 `collect_batches()` streams results as `DataFrame` chunks. It is unstable and
@@ -77,23 +92,6 @@ assert sum(sizes) == 3
 `sink_batches(function, chunk_size=...)` calls a function per chunk and can
 return a `LazyFrame` for lazy execution. Check every chunk; the query runs
 fully unless stopped.
-
-## Property-based tests
-
-`polars.testing.parametric` provides Hypothesis strategies:
-
-```python
-from hypothesis import given
-from polars.testing.parametric import dataframes
-
-@given(dataframes(cols=3, allow_null=True))
-def test_numeric(df):
-    assert df.height >= 0
-```
-
-Use `load_profile` / `set_profile` and `POLARS_HYPOTHESIS_PROFILE` to control
-the number of examples. This is optional; do not add Hypothesis to a project
-that does not already use it.
 
 ## References
 

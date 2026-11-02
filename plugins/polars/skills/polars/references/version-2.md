@@ -234,24 +234,11 @@ finish under a budget. Lazy `collect()` already resolves to streaming on
 environment variables set before importing Polars; see `lazy-api.md` for the
 settings and trade-offs.
 
-**New API surface.**
-
-- `join_where(..., how=...)` accepts `"inner"`, `"left"`, `"right"`, and
-  `"full"`; 2.1 adds the right/full variants.
-- SQL adds recursive CTEs, `CREATE [OR REPLACE] TEMP TABLE`, `ASOF JOIN`,
-  correlated subqueries, `generate_series`/`range`, `REGEXP_REPLACE`,
-  `DATE_TRUNC`, `CURRENT_DATE`/`CURRENT_TIME`/`CURRENT_TIMESTAMP`,
-  time-zone-aware timestamps, `STRUCT`/`MAP` type names, qualified table
-  names, and `read_ndjson` / path lists in `read_*` table functions.
-- Parquet encryption: `read_parquet(..., decryption=...)` and
-  `write_parquet(..., encryption=...)` take
-  `pl.ParquetDecryptionProperties` / `pl.ParquetEncryptionProperties`
-  (unstable).
-- Iceberg: `SQLContext.register_catalog`, `CREATE TABLE` / `DROP TABLE
-  [PURGE]`, `pl.delete_iceberg`, and `sink_iceberg` options
-  `create_if_not_exists`, `create_namespace_if_not_exists`, and
-  `overwrite_filter`.
-- `reinterpret` supports `Int128` ↔ `Decimal`.
+**New API surface.** 2.1 adds `join_where(how="right"/"full")`, SQL
+recursive CTEs / temp tables / ASOF / subqueries / table functions, Parquet
+encryption, Iceberg catalogs, and `reinterpret` between `Int128` and
+`Decimal`. See `joins.md`, `sql.md`, `io.md`, and `iceberg.md`. Masked NumPy
+arrays are covered below.
 
 **Masked NumPy arrays.** `to_numpy(masked=True)` returns a
 `numpy.ma.MaskedArray` that preserves the column dtype and masks nulls;
