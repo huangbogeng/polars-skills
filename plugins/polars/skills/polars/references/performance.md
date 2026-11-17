@@ -210,9 +210,12 @@ Format matrix and entry points: `io.md`.
 - If multiprocessing is required, use the `"spawn"` start method, not
   `"fork"`; `fork` copies locks from the multithreaded parent and can
   deadlock.
-- `POLARS_MAX_THREADS` can override the thread pool size, but must be set
-  before importing Polars. The docs recommend leaving it to the engine
-  except in special contexts such as a PySpark UDF.
+- Keep the default thread pool (all available cores). `POLARS_MAX_THREADS`
+  overrides the pool size and must be set before importing Polars. Change
+  it only when a measurement shows a problem: severe oversubscription from
+  concurrent jobs, a container or scheduler with fewer usable cores than
+  Polars detects, or a nested runtime such as a PySpark UDF. Record
+  throughput before and after; do not lower it defensively.
 - `pl.thread_pool_size()` reports the current pool size.
 - `POLARS_OOC_*` and `POLARS_ENGINE_AFFINITY` are covered in
   `lazy-api.md`.
@@ -221,7 +224,7 @@ Format matrix and entry points: `io.md`.
 
 | Setting | Scope | Notes |
 |---|---|---|
-| `POLARS_MAX_THREADS` | process, before import | Override the thread pool only in special contexts (for example a PySpark UDF); otherwise let the engine choose. |
+| `POLARS_MAX_THREADS` | process, before import | Defaults to all available cores; override only for a measured problem (oversubscription, pinned or limited CPUs, nested runtime) and re-benchmark. |
 | `POLARS_ENGINE_AFFINITY` | process | `"in-memory"` restores the pre-2.0 lazy default; `"streaming"` forces streaming. |
 | `POLARS_OOC_MEMORY_BUDGET_MB` | process, before import | 2.1 out-of-core spill budget. |
 | `POLARS_OOC_LOG_METRICS` | process, before import | Log spill/prefetch statistics. |

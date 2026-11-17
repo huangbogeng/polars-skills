@@ -80,6 +80,12 @@ print(lf.head(5).collect())          # eyeball values, formats, dirt
 - **Prefer native expressions.** Per-element Python UDFs serialize values
   and limit optimization. Use `map_batches` with a compiled function only
   when no expression exists; see `references/performance.md`.
+- **Leave the thread pool at its default.** Polars already uses the
+  available cores. Set `POLARS_MAX_THREADS` (before `import polars`) only
+  for a measured problem — oversubscription from other jobs, a container or
+  scheduler exposing fewer usable CPUs, or a nested runtime such as a
+  PySpark UDF — and re-benchmark after the change; details in
+  `references/performance.md`.
 - **Filter early when semantics allow.** Moving a filter across a window,
   aggregate, cumulative operation, or outer join can change results. Let the
   optimizer push safe predicates.
